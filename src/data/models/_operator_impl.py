@@ -1,3 +1,4 @@
+from typing import Dict
 from src.domain.models.operator import Operator, STR_DICT, LIST_STR_DICT
 from src.helpers.bundle_helper import *
 
@@ -6,13 +7,10 @@ class OperatorImpl(Operator):
         self,
         op_id: str,
         data: dict,
-        *,
-        cfg: _CfgLike,
         tables: Dict[str, Any],
         is_recruit: bool = False,
     ):
         super().__init__()
-        self._cfg = cfg
         self._tables = tables
         self._raw = data  # 如你愿意可去掉
 
@@ -29,7 +27,7 @@ class OperatorImpl(Operator):
 
         # type / rarity / number
         pos = data.get("position")
-        self.type = cfg.types.get(pos, "未知") if hasattr(cfg, "types") else "未知"
+        self.type = tables.get("types", {}).get(pos, "未知")
 
         rarity_raw = data.get("rarity", 0)
         if isinstance(rarity_raw, str):
@@ -54,7 +52,7 @@ class OperatorImpl(Operator):
         # classes
         prof = data.get("profession")
         self.classes_code = prof or ""
-        self.classes = cfg.classes.get(prof, "未知") if hasattr(cfg, "classes") else "未知"
+        self.classes = tables.get("classes", {}).get(prof, "未知")
 
         sub_prof_id = data.get("subProfessionId")
         self.classes_sub = sub_classes.get(sub_prof_id, {}).get("subProfessionName", "未知")
@@ -81,8 +79,8 @@ class OperatorImpl(Operator):
             self.potential_item = items[pid].get("description", "")
 
         # flags
-        self.limit = self.name in getattr(cfg, "limit", [])
-        self.unavailable = self.name in getattr(cfg, "unavailable", [])
+        self.limit = self.name in tables.get("limit", [])
+        self.unavailable = self.name in tables.get("unavailable", [])
 
         self.is_recruit = is_recruit
         self.is_classic = bool(data.get("classicPotentialItemId"))

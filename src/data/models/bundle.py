@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from src.data.loader.json_file_loader import JsonFileLoader
-from src.data.models.operator_impl import OperatorImpl
 from src.domain.models.operator import Operator
 from src.helpers.bundle_helper import *
 

@@ -6,8 +6,9 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    GameDataPath: str
-    GameDataRepo: str
+    ProjectRoot: Path = None
+    GameDataPath: str = None
+    GameDataRepo: str = None
 
     def load_from_disk(self):
         # 按照以下路径顺序寻找config.json文件

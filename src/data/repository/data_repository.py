@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Callable, Awaitable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from src.app.context import AppContext
+from src.config.model import Config
+from src.data.loader._git_gamedata_maintainer import GitGameDataMaintainer
 from src.data.models.bundle import DataBundle
-from src.data.loader.json_file_loader import JsonFileLoader
-from src.data.loader.git_gamedata_maintainer import GitGameDataMaintainer
-from src.data.models.operator_impl import OperatorImpl
+from src.data.models._operator_impl import OperatorImpl
 from src.domain.models.operator import Operator
 from src.domain.models.token import Token
-from src.helpers.bundle_helper import *
+from src.helpers.bundle_helper import build_range, html_tag_format
 
 log = logging.getLogger(__name__)
 
@@ -20,45 +21,55 @@ log = logging.getLogger(__name__)
 class DataNotReadyError(RuntimeError):
     """数据尚未准备好（内存中没有 bundle）"""
 
-
 @dataclass(slots=True)
 class DataRepository:
     """
     DataRepository：持有当前 DataBundle（只读快照）并提供刷新能力。
 
-    - 不建议在 get_bundle() 里做 IO
-    - ensure_ready()/refresh_from_disk() 才做 IO（通常在启动或维护任务中调用）
+    - get_bundle() 不做 IO
+    - startup_prepare()/refresh_from_disk()/ensure_ready() 才做 IO
     """
 
-    json_loader: JsonFileLoader
+    cfg: Config
 
-    # 维护器（git pull/clone + unzip）
-    maintainer: Optional[GitGameDataMaintainer] = None
+    _maintainer: Optional[GitGameDataMaintainer] = field(default=None, init=False, repr=False)
+    _bundle: Optional[DataBundle] = field(default=None, init=False, repr=False)
 
-    # 内部状态
-    _bundle: Optional[DataBundle] = None
-    _ready_lock: asyncio.Lock = asyncio.Lock()
-    _update_lock: asyncio.Lock = asyncio.Lock()
+    _ready_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
+    _update_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
-    context : AppContext
+    def __post_init__(self):
+        # 约定：cfg.GameDataPath 指向解包数据根目录（里面有 excel/character_table.json 等）
+        data_root = Path(self.cfg.GameDataPath)
+
+        # maintainer 的根目录/参数你要确保与 update() 的实现一致
+        # 这里按你原来写法：把 repo 拉到 GameDataPath 的父目录
+        self._maintainer = GitGameDataMaintainer(self.cfg.GameDataRepo, data_root.parent)
+
+    # ---------- public ----------
 
     def is_ready(self) -> bool:
         return self._bundle is not None
 
     def get_bundle(self) -> DataBundle:
-        """
-        高频读：直接返回当前快照（不加锁）。
-        如果你保证启动阶段已经 ensure_ready()，业务里就不会报错。
-        """
         if self._bundle is None:
-            raise DataNotReadyError("Game data bundle is not ready. Call ensure_ready() first.")
+            raise DataNotReadyError("Game data bundle is not ready. Call startup_prepare()/ensure_ready() first.")
         return self._bundle
 
+    async def startup_prepare(self, force_update_on_first_run: bool = True) -> DataBundle:
+        if self._maintainer is None:
+            raise RuntimeError("No maintainer configured; cannot perform startup_prepare.")
+
+        if force_update_on_first_run and not self._maintainer.is_initialized():
+            log.info("No local gamedata found. Performing first-time git update...")
+            ok = await asyncio.to_thread(self._maintainer.update)
+            if not ok:
+                raise RuntimeError("First-time gamedata update failed.")
+            log.info("First-time gamedata update done.")
+
+        return await self.refresh_from_disk()
+
     async def ensure_ready(self) -> DataBundle:
-        """
-        懒加载：当 _bundle 为空时，从磁盘加载一次（并发安全）。
-        注意：这里只读磁盘，不做 git 更新/解压。
-        """
         if self._bundle is not None:
             return self._bundle
 
@@ -73,31 +84,21 @@ class DataRepository:
             return bundle
 
     async def refresh_from_disk(self) -> DataBundle:
-        """
-        强制从磁盘重载并原子替换内存快照。
-        """
         async with self._update_lock:
             log.info("Refreshing game data bundle from disk...")
             bundle = await asyncio.to_thread(self._load_bundle)
-            self._bundle = bundle  # 原子替换
-            # 数据刷新后，建议清一下 json loader 的 cache
-            self.json_loader.clear_cache()
+            self._bundle = bundle
             log.info("Game data bundle refreshed. version=%s", getattr(bundle, "version", ""))
             return bundle
 
     async def update_and_refresh(self) -> bool:
-        """
-        可选：执行维护任务（git pull/clone + unzip），成功后 refresh_from_disk。
-        这是给“定时维护任务”用的。
-        """
-        if self.maintainer is None:
+        if self._maintainer is None:
             log.warning("No maintainer configured; skip update.")
             return False
 
         async with self._update_lock:
-            # 维护任务是阻塞 IO，丢到线程里
             log.info("Updating gamedata on disk (git+zip)...")
-            ok = await asyncio.to_thread(self.maintainer.update)
+            ok = await asyncio.to_thread(self._maintainer.update)
             if not ok:
                 log.warning("Update gamedata on disk failed.")
                 return False
@@ -105,29 +106,31 @@ class DataRepository:
             log.info("Update ok. Reloading bundle into memory...")
             bundle = await asyncio.to_thread(self._load_bundle)
             self._bundle = bundle
-            self.json_loader.clear_cache()
             log.info("Bundle reloaded after update. version=%s", getattr(bundle, "version", ""))
             return True
 
+    # ---------- internal ----------
+
+    def _read_json(self, name: str, folder: str) -> Dict[str, Any]:
+        """
+        直接读取文件：<GameDataPath>/<folder>/<name>.json
+        读不到/解析失败则返回 {}
+        """
+        path = Path(self.cfg.GameDataPath) / folder / f"{name}.json"
+        if not path.exists():
+            return {}
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                return json.load(f) or {}
+        except Exception:
+            log.exception("Failed to read json: %s", path)
+            return {}
+
     def _load_bundle(self) -> DataBundle:
-        """
-        同步方法：从 json_loader 构建 bundle。
-        放到 to_thread 里调用，避免阻塞 event loop。
-        """
-        return self._load_bundle_from_loader()
+        return self._load_bundle_from_disk()
 
-    
-    def _load_bundle_from_loader(self) -> DataBundle:
-        """
-        - 从 JsonFileLoader 读取必要的表
-        - 构建 OperatorImpl / TokenImpl（domain objects）
-        - 构建索引
-        - 返回 DataBundle
-
-        你可以在 DataRepository 的 ensure_ready/refresh_from_disk 中调用它。
-        """
-
-        # 1) 读取表（缺失就给默认值，确保 loader 不报错）
+    def _load_bundle_from_disk(self) -> DataBundle:
+        # 1) 读取表
         tables: Dict[str, Any] = {}
         for name, folder in [
             ("character_table", "excel"),
@@ -138,20 +141,36 @@ class DataRepository:
             ("skill_table", "excel"),
             ("charword_table", "excel"),
             ("char_meta_table", "excel"),
-            # 你后面需要再加：handbook_info_table / skin_table / building_data / battle_equip_table ...
         ]:
-            tables[name] = self.json_loader.read_json(name, folder=folder) or {}
+            tables[name] = self._read_json(name, folder) or {}
 
-        character_table: Dict[str, dict] = tables["character_table"] or {}
+        # 2) 添加本地表（你后面可以改成 cfg 提供）
+        tables["token_classes"] = {"TOKEN": "召唤物", "TRAP": "装置"}
+        tables["types"] = {"ALL": "不限部署位", "MELEE": "近战位", "RANGED": "远程位"}
+        tables["classes"] = {
+            "CASTER": "术师",
+            "MEDIC": "医疗",
+            "PIONEER": "先锋",
+            "SNIPER": "狙击",
+            "SPECIAL": "特种",
+            "SUPPORT": "辅助",
+            "TANK": "重装",
+            "WARRIOR": "近卫",
+        }
+        tables["high_star"] = {"5": "资深干员", "6": "高级资深干员"}
 
-        # 2) 构建 Token（旧项目 Token 从 character_table 的某些条目来，这里给一个“可运行”的策略）
-        #    你可以按自己实际数据规则调整 token 的筛选条件
+        tables["limit"] = []
+        tables["unavailable"] = []
+
+        character_table: Dict[str, dict] = tables.get("character_table") or {}
+        range_table: Dict[str, Any] = tables.get("range_table") or {}
+
+        # 3) 构建 Token
         tokens: Dict[str, Token] = {}
-        range_table = tables.get("range_table") or {}
+        token_classes = tables.get("token_classes", {}) or {}
+        types = tables.get("types", {}) or {}
 
         for code, data in character_table.items():
-            # 一个非常保守的判定：token 往往没有 displayNumber，且很多 token id 不是 char_ 开头
-            # 你可以更精确：比如 data.get("isNotObtainable") 或 profession/position 特征等
             if not isinstance(data, dict):
                 continue
             if str(code).startswith("token_") or data.get("profession") == "TOKEN":
@@ -159,20 +178,23 @@ class DataRepository:
                 attrs: List[Dict[str, Any]] = []
                 for evolve, ph in enumerate(phases):
                     rid = ph.get("rangeId")
-                    grids = range_table.get(rid, {}).get("grids")
+                    grids = (range_table.get(rid) or {}).get("grids")
                     range_map = build_range(grids) if grids else "无范围"
-                    attrs.append({"evolve": evolve, "range": range_map, "attr": ph.get("attributesKeyFrames")})
+                    attrs.append(
+                        {"evolve": evolve, "range": range_map, "attr": ph.get("attributesKeyFrames")}
+                    )
+
                 tokens[code] = Token(
                     id=code,
                     name=data.get("name", ""),
                     en_name=data.get("appellation", ""),
                     description=html_tag_format(data.get("description") or ""),
-                    classes=getattr(self.context.cfg, "token_classes", {}).get(data.get("profession"), "未知"),
-                    type=getattr(self.context.cfg, "types", {}).get(data.get("position"), "未知"),
+                    classes=token_classes.get(data.get("profession"), "未知"),
+                    type=types.get(data.get("position"), "未知"),
                     attr=attrs,
                 )
 
-        # 3) 构建 Operator domain objects + 索引
+        # 4) 构建 Operator + 索引
         operators: Dict[str, Operator] = {}
         name_to_id: Dict[str, str] = {}
         index_to_id: Dict[str, str] = {}
@@ -180,23 +202,20 @@ class DataRepository:
         for op_id, data in character_table.items():
             if not isinstance(data, dict):
                 continue
-
-            # 旧项目里 operator_table 是 character_table 的“干员条目”部分，这里做一个基础过滤：
-            # 排除明显不是干员的数据（你可按实际规则完善）
             if not str(op_id).startswith("char_"):
                 continue
 
-            op = OperatorImpl(op_id, data, cfg=self.context.cfg, tables=tables, is_recruit=False)
+            op = OperatorImpl(op_id, data, tables=tables, is_recruit=False)
             operators[op_id] = op
 
-            if op.name:
+            if getattr(op, "name", ""):
                 name_to_id[op.name] = op_id
-            if op.en_name:
+            if getattr(op, "en_name", ""):
                 name_to_id[op.en_name] = op_id
-            if op.index_name:
+            if getattr(op, "index_name", ""):
                 index_to_id[op.index_name] = op_id
 
-        # 4) version：如果你有 version.json 或 git commit hash，可以在这里读
+        # 5) version（你可以以后改成读取 version.json 或 git commit）
         version = "unknown"
 
         return DataBundle(

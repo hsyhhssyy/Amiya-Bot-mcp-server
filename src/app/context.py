@@ -1,9 +1,12 @@
-#src/app/context.py
+# src/app/context.py
+from dataclasses import dataclass
+from typing import Optional
+
 from src.config.model import Config
-from src.data.repository.data_repository import OperatorRepository
+from src.data.repository.data_repository import DataRepository
 
+
+@dataclass(slots=True)
 class AppContext:
-    def __init__(self, cfg: Config):
-        self.operator_repo = OperatorRepository()
-        pass
-
+    cfg: Config
+    data_repository: Optional[DataRepository] = None

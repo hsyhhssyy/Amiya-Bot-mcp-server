@@ -9,6 +9,10 @@ class GitGameDataMaintainer:
         self.base_dir = base_dir
         self.assets_dir = base_dir / "assets"
         self.gamedata_dir = base_dir / "gamedata"
+        
+    def is_initialized(self) -> bool:
+        # 以你 loader 读取的关键表作为标志
+        return (self.gamedata_dir / "excel" / "character_table.json").exists()
 
     def _run_git(self, args, cwd=None) -> int:
         p = subprocess.Popen(["git"] + args, cwd=cwd,

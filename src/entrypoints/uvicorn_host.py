@@ -1,25 +1,25 @@
-#src/entrypoints/uvicorn_host.py
+# src/entrypoints/uvicorn_host.py
 from fastapi import FastAPI
-from mcp.server.fastmcp import FastMCP
+from contextlib import asynccontextmanager
 import uvicorn
-from src.config.model import Config
-from src.app.context import AppContext
 
+from src.app.bootstrap import build_context_from_disk
 from src.adapters.mcp.app import register_asgi
 
 def uvicorn_main():
-    app = FastAPI()
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        ctx = await build_context_from_disk()
+        app.state.ctx = ctx
+        yield
+        # 这里可以做 shutdown 清理（如果需要）
 
-    cfg = Config()
-    cfg.load_from_disk()
+    app = FastAPI(lifespan=lifespan)
 
-    ctx = AppContext(cfg=cfg)
-
-    register_asgi(app,ctx)
-
-    # 定义一个简单的状态检查路由
+    register_asgi(app)
+    
     @app.get("/rest/status")
     async def status():
         return {"status": "ok"}
 
-    uvicorn.run(app, host="0.0.0.0", port=9000, log_config=logger.LOG_CONFIG)
+    uvicorn.run(app, host="0.0.0.0", port=9000)
