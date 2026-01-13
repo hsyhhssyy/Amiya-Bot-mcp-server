@@ -1,9 +1,9 @@
-from src.server import app
-from src.assets import JsonData
-import src.accessories.logger as logger
-import uvicorn
+try:
+    from src.adapters.astrbot.plugin import MyPlugin  # noqa: F401
+except Exception:
+    MyPlugin = None  # 仅作为占位，别做初始化
 
-if __name__ == '__main__':
-    logger.setup_logging()
-    JsonData.init()
-    uvicorn.run(app, host="0.0.0.0", port=9000, log_config=logger.LOG_CONFIG)
+
+if __name__ == "__main__":
+    from src.entrypoints.uvicorn_host import uvicorn_main
+    uvicorn_main()
