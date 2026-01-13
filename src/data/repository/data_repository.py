@@ -116,7 +116,7 @@ class DataRepository:
         直接读取文件：<GameDataPath>/<folder>/<name>.json
         读不到/解析失败则返回 {}
         """
-        path = Path(self.cfg.GameDataPath) / folder / f"{name}.json"
+        path = Path(folder) / f"{name}.json"
         if not path.exists():
             return {}
         try:
@@ -142,9 +142,10 @@ class DataRepository:
             ("charword_table", "excel"),
             ("char_meta_table", "excel"),
         ]:
-            tables[name] = self._read_json(name, folder) or {}
+            exact_folder = Path(self.cfg.GameDataPath) / folder
+            tables[name] = self._read_json(name, str(exact_folder)) or {}
 
-        # 2) 添加本地表（你后面可以改成 cfg 提供）
+        # 2) 添加常量表
         tables["token_classes"] = {"TOKEN": "召唤物", "TRAP": "装置"}
         tables["types"] = {"ALL": "不限部署位", "MELEE": "近战位", "RANGED": "远程位"}
         tables["classes"] = {
@@ -158,6 +159,68 @@ class DataRepository:
             "WARRIOR": "近卫",
         }
         tables["high_star"] = {"5": "资深干员", "6": "高级资深干员"}
+        tables["html_symbol"] = {
+            "<替身>": "替身",
+            "<支援装置>": "支援装置",
+        }
+
+        tables["sp_type"] = {
+            "INCREASE_WITH_TIME": "自动回复",
+            "INCREASE_WHEN_ATTACK": "攻击回复",
+            "INCREASE_WHEN_TAKEN_DAMAGE": "受击回复",
+            1: "自动回复",
+            2: "攻击回复",
+            4: "受击回复",
+            8: "被动",
+        }
+
+        tables["skill_type"] = {
+            "PASSIVE": "被动",
+            "MANUAL": "手动触发",
+            "AUTO": "自动触发",
+            0: "被动",
+            1: "手动触发",
+            2: "自动触发",
+        }
+
+        tables["skill_level"] = {
+            1: "等级1",
+            2: "等级2",
+            3: "等级3",
+            4: "等级4",
+            5: "等级5",
+            6: "等级6",
+            7: "等级7",
+            8: "等级8（专精1）",
+            9: "等级9（专精2）",
+            10: "等级10（专精3）",
+        }
+
+        tables["attrs"] = {
+            "maxHp": "最大生命值",
+            "atk": "攻击力",
+            "def": "防御力",
+            "magicResistance": "魔法抗性",
+            "attackSpeed": "攻击速度",
+            "baseAttackTime": "攻击间隔",
+            "blockCnt": "阻挡数",
+            "cost": "部署费用",
+            "respawnTime": "再部署时间",
+        }
+
+        tables["attrs_unit"] = {
+            "baseAttackTime": "秒",
+            "respawnTime": "秒",
+        }
+
+
+        # 添加本地表
+        # 将 ProjectRoot/data/tables 下的所有 json 文件读入 tables
+        local_tables_path = Path(self.cfg.ProjectRoot) / "data" / "local"
+        if local_tables_path.exists() and local_tables_path.is_dir():
+            for file in local_tables_path.glob("*.json"):
+                table_name = file.stem
+                tables["local_"+table_name] = self._read_json(table_name, str(local_tables_path)) or {}
 
         tables["limit"] = []
         tables["unavailable"] = []

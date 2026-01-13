@@ -3,142 +3,86 @@ import logging
 
 from typing import Annotated
 from pydantic import Field
-from src.server import mcp
-from src.assets import JsonData
-from src.assets.convert import html_tag_format
-from src.assets.gameData import GameData
-from src.assets.glossary_data import GLOSSARY
+
+from src.adapters.mcp.mcp_tools.arknights_glossary import mark_glossary_used_terms
+from src.app.context import AppContext
+from src.domain.models.operator import Operator
 
 logger = logging.getLogger("mcp_tool")
+def register_operator_basic_tool(mcp, app):
+    @mcp.tool(description="获取干员的基础信息和属性")
+    def get_operator_basic(
+        operator_name: Annotated[str, Field(description="干员名")],
+        operator_name_prefix: Annotated[str, Field(description="干员名的前缀，没有则为空")] = "",
+    ) -> str:
+        
+        logger.info(f'查询干员基础信息：{operator_name_prefix}{operator_name}')
 
-class GameDict:
-    classes = {
-        'CASTER': '术师',
-        'MEDIC': '医疗',
-        'PIONEER': '先锋',
-        'SNIPER': '狙击',
-        'SPECIAL': '特种',
-        'SUPPORT': '辅助',
-        'TANK': '重装',
-        'WARRIOR': '近卫',
-    }
-    token_classes = {
-        'TOKEN': '召唤物',
-        'TRAP': '装置',
-    }
-    high_star = {
-        '5': '资深干员',
-        '6': '高级资深干员',
-    }
-    types = {
-        'ALL': '不限部署位',
-        'MELEE': '近战位',
-        'RANGED': '远程位',
-    }
-    html_symbol = {
-        '<替身>': '替身',
-        '<支援装置>': '支援装置',
-    }
-    sp_type = {
-        'INCREASE_WITH_TIME': '自动回复',
-        'INCREASE_WHEN_ATTACK': '攻击回复',
-        'INCREASE_WHEN_TAKEN_DAMAGE': '受击回复',
-        1: '自动回复',
-        2: '攻击回复',
-        4: '受击回复',
-        8: '被动',
-    }
-    skill_type = {
-        'PASSIVE': '被动',
-        'MANUAL': '手动触发',
-        'AUTO': '自动触发',
-        0: '被动',
-        1: '手动触发',
-        2: '自动触发',
-    }
-    skill_level = {
-        1: '等级1',
-        2: '等级2',
-        3: '等级3',
-        4: '等级4',
-        5: '等级5',
-        6: '等级6',
-        7: '等级7',
-        8: '等级8（专精1）',
-        9: '等级9（专精2）',
-        10: '等级10（专精3）',
-    }
-    attrs = {
-        'maxHp': '最大生命值',
-        'atk': '攻击力',
-        'def': '防御力',
-        'magicResistance': '魔法抗性',
-        'attackSpeed': '攻击速度',
-        'baseAttackTime': '攻击间隔',
-        'blockCnt': '阻挡数',
-        'cost': '部署费用',
-        'respawnTime': '再部署时间',
-    }
-    attrs_unit = {
-        'baseAttackTime': '秒',
-        'respawnTime': '秒',
-    }
+        # 1) 基础防御：ctx / repo / bundle / tables
+        if not getattr(app.state, "ctx", None):
+            logger.warning("未初始化数据上下文")
+            return "未初始化数据上下文"
 
-@mcp.tool(
-    description='获取干员的基础信息和属性',
-)
-def get_operator_basic(
-    operator_name: Annotated[str, Field(description='干员名')],
-    operator_name_prefix: Annotated[str, Field(description='干员名的前缀，没有则为空')] = '',
-) -> str:
-    team_table = JsonData.get_json_data('handbook_team_table')
-    sub_classes = JsonData.get_json_data('uniequip_table')['subProfDict']
+        context: AppContext = app.state.ctx
+        if not context.data_repository:
+            logger.warning("数据仓库未初始化")
+            return "数据仓库未初始化"
+        
 
-    opt, operator_name = GameData.get_operator(operator_name, operator_name_prefix)
-    char = opt.data
-    char_name = char['name']
+        bundle = context.data_repository.get_bundle()
+        tables = getattr(bundle, "tables", None) or {}
 
-    if not opt:
-        return f'未找到干员{operator_name}的资料'
+        operator_id = bundle.operator_name_to_id.get(operator_name_prefix+operator_name,None)
+        if not operator_id:
+            logger.warning(f'未找到干员{operator_name}的资料')
+            return f'未找到干员{operator_name}的资料'
+        
+        opt = bundle.operators.get(operator_id)
 
-    char_desc = html_tag_format(char['description'])
+        if not opt or not isinstance(opt, Operator):
+            logger.warning(f'未找到干员{operator_name}的资料')
+            return f'未找到干员{operator_name}的资料'
+        
+        glossary_used = []
 
-    classes = GameDict.classes[char['profession']]
-    classes_sub = sub_classes[char['subProfessionId']]['subProfessionName']
+        char_name = opt.name
 
-    group_id = char['groupId']
-    group = team_table[group_id]['powerName'] if group_id in team_table else '无'
+        opt_detail = opt.detail()
 
-    max_phases = char['phases'][-1]
-    max_attr = max_phases['attributesKeyFrames'][-1]['data']
+        char_desc = opt_detail.get('trait',"无描述")
 
-    content = f'{char_name}\n职业：{classes_sub}（{classes}），{char_desc}\n阵营：{group}\n' + '\n'.join(
-        [f'{n}：{max_attr[k]}%s' % GameDict.attrs_unit.get(k, '') for k, n in GameDict.attrs.items()]
-    )
+        classes = opt.classes
+        classes_sub = opt.classes_sub
 
-    # 处理classes_glossary
-    if classes in GLOSSARY:
-        content += f'\n\n{classes}:{GLOSSARY[classes]}'
-    if classes_sub in GLOSSARY:
-        content += f'\n\n{classes_sub}{GLOSSARY[classes_sub]}'
+        group = opt.group
 
-    talents = []
-    if char['talents']:
-        for index, item in enumerate(char['talents']):
-            max_item = item['candidates'][-1]
-            if max_item['name']:
+
+        content = f'{char_name}\n职业：{classes_sub}（{classes}），{char_desc}\n阵营：{group}\n' + '\n'.join(
+            [f'{n}：{opt_detail[k]}%s' % tables.get("attrs_unit", {}).get(k, '') for k, n in tables.get("attrs", {}).items()]
+        )
+
+        # 处理classes_glossary
+        
+        glossary_used += mark_glossary_used_terms(context,classes)
+        glossary_used += mark_glossary_used_terms(context,classes_sub)
+
+        talents = []
+
+        for index, item in enumerate(opt.talents()):
+            if item['talents_name']:
                 text = '第%d天赋：%s，效果为%s。' % (
                     index + 1,
-                    max_item['name'],
-                    html_tag_format(max_item['description']),
+                    item['talents_name'],
+                    item['talents_desc'],
                 )
-                text = re.sub(r'（[+-]\d+(\.\d+)?%?）', '', text)
-                text = re.sub(r'\([+-]\d+(\.\d+)?%?\)', '', text)
 
                 talents.append(text)
 
-    content += ('\n\n' + '\n'.join(talents)) if talents else ''
+        content += ('\n\n' + '\n'.join(talents)) if talents else ''
 
-    logger.info(content)
+        if glossary_used:
+            content += '\n\n涉及术语：' + '，'.join(set(glossary_used))
 
-    return content
+        logger.info(content)
+
+        return content
