@@ -1,0 +1,39 @@
+{
+  "type": "{{ r.type }}",
+  "key": "{{ r.key }}",
+  "title": "{{ r.title }}",
+  "data": {
+    "operator_id": "{{ r.data.operator_id }}",
+    "query_name": "{{ r.data.query_name }}",
+    "name": "{{ r.data.name }}",
+    "profession": "{{ r.data.profession }}",
+    "sub_profession": "{{ r.data.sub_profession }}",
+    "desc": {{ r.data.desc | tojson }},
+    "group": {{ r.data.group | tojson }},
+    "attrs": [
+      {%- for a in r.data.attrs %}
+      {
+        "key": "{{ a.key }}",
+        "name": {{ a.name | tojson }},
+        "value": {{ a.value | tojson }},
+        "unit": {{ a.unit | tojson }}
+      }{{ "," if not loop.last else "" }}
+      {%- endfor %}
+    ],
+    "talents": [
+      {%- for t in r.data.talents %}
+      {
+        "index": {{ t.index }},
+        "name": {{ t.name | tojson }},
+        "desc": {{ t.desc | tojson }}
+      }{{ "," if not loop.last else "" }}
+      {%- endfor %}
+    ],
+    "glossary_used": [
+      {%- for g in r.data.glossary_used %}
+      {{ g | tojson }}{{ "," if not loop.last else "" }}
+      {%- endfor %}
+    ]
+  },
+  "meta": {{ r.meta | tojson }}
+}

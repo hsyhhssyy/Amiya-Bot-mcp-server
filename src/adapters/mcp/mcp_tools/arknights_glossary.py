@@ -82,32 +82,6 @@ def register_glossary_tool(mcp,app):
         logger.info(f"{retVal}")
         return retVal
 
-def mark_glossary_used_terms(ctx, text: str) -> List:
-    """
-    在给定文本中，查找并标记所有出现的 glossary 术语，并且返回这些术语列表。
-    """
-
-    if not ctx.data_repository:
-        return []
-
-    bundle = ctx.data_repository.get_bundle()
-
-    if bundle.tables.get("local_glossary") is None:
-        return []
-
-    glossary = bundle.tables["local_glossary"]
-
-    used_terms = set()
-    all_glossary_terms = list(glossary.keys())
-
-    for g in all_glossary_terms:
-        if g in text:
-            used_terms.add(g)
-
-    return list(used_terms)
-
-    
-
 def split_terms(s: str) -> List[str]:
     """
     将输入字符串按常见中文/英文分隔符切分为术语列表，并去除空白。

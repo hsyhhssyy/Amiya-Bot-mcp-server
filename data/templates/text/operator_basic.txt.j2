@@ -1,0 +1,18 @@
+{{ r.data.name }}
+职业：{{ r.data.sub_profession }}（{{ r.data.profession }}），{{ r.data.desc }}
+阵营：{{ r.data.group }}
+{%- for a in r.data.attrs %}
+{{ a.name }}：{{ a.value }}{{ a.unit }}
+{%- endfor %}
+
+{%- if r.data.talents and r.data.talents|length > 0 %}
+
+{%- for t in r.data.talents %}
+第{{ t.index }}天赋：{{ t.name }}，效果为{{ t.desc }}。
+{%- endfor %}
+{%- endif %}
+
+{%- if r.data.glossary_used and r.data.glossary_used|length > 0 %}
+
+涉及术语：{{ r.data.glossary_used | join("，") }}
+{%- endif %}
