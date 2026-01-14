@@ -20,13 +20,11 @@ class AmiyaBotAstrbotPlugin(Star):
         
         self._astrbot_config = config
         self.ctx: AppContext | None = None
-        
-        print("AmiyaBotAstrbotPlugin initialized")
 
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-        print("AmiyaBotAstrbotPlugin initialize called")
         self.ctx = await build_context_from_astrbot(self._astrbot_config)
+        print("AmiyaBotAstrbotPlugin resource root:", self.ctx.cfg.GameDataPath)
 
     # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
     @filter.command("helloworld")
