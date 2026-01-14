@@ -6,15 +6,9 @@ from astrbot.api import logger
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
-        
-        # self._astrbot_config = config
-        # self.ctx: AppContext | None = None
-        
 
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-        # self.ctx = await build_context_from_astrbot(self._astrbot_config)
-        pass
 
     # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
     @filter.command("helloworld")
