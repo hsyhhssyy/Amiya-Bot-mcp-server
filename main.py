@@ -1,12 +1,5 @@
 import sys
 
-IS_MCP = "mcp" in sys.argv
-
-if __name__ == "__main__" and IS_MCP:
-    # 只有使用参数 mcp 启动时，才走 MCP（uvicorn）入口
-    from src.entrypoints.uvicorn_host import uvicorn_main
-    uvicorn_main()
-
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger,AstrBotConfig
