@@ -20,10 +20,10 @@ async def build_context_from_astrbot(config: AstrBotConfig) -> AppContext:
 
     ctx = AppContext(cfg=cfg)
 
-    data_repo = DataRepository(
-        cfg=cfg,
-    )
-    await data_repo.startup_prepare(True)
-    ctx.data_repository = data_repo
+    # data_repo = DataRepository(
+    #     cfg=cfg,
+    # )
+    # await data_repo.startup_prepare(True)
+    # ctx.data_repository = data_repo
 
     return ctx
