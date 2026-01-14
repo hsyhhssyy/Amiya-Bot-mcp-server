@@ -6,7 +6,7 @@ import uvicorn
 import asyncio
 import logging
 
-from src.app.bootstrap import build_context_from_disk
+from src.app.bootstrap_disk import build_context_from_disk
 from src.adapters.mcp.app import register_asgi
 from src.app.context import AppContext
 

@@ -15,6 +15,7 @@ class JinjaJsonRenderer(Renderer):
 
     def __init__(self, loader: JinjaTemplateLoader):
         self.loader = loader
+        self.kind = "jinja_json"
 
     def render(self, template_name: str, result: QueryResult) -> RenderOutput:
         # 约定：json/<template>.json.j2
