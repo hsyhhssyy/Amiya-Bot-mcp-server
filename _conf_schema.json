@@ -1,0 +1,6 @@
+{
+  "GameDataRepo": {
+    "description": "GameDataRepo",
+    "type": "string"
+  }
+}

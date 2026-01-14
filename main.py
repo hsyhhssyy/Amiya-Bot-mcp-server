@@ -4,4 +4,5 @@ if __name__ == "__main__":
 else:
     from .src.adapters.astrbot.plugin import MyPlugin as RealPlugin
     class MyPlugin(RealPlugin):
-        pass
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
