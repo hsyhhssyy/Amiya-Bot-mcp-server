@@ -4,14 +4,15 @@ import os
 from pathlib import Path
 
 from dataclasses import dataclass
+from typing import Optional
 
 FILE_PATH = Path(__file__).parent.parent.parent.resolve()
 
 @dataclass
 class Config:
-    ProjectRoot: Path = None
-    GameDataPath: str = None
-    GameDataRepo: str = None
+    ProjectRoot: Optional[Path] = None
+    GameDataPath: Optional[str] = None
+    GameDataRepo: Optional[str] = None
 
     def load_from_disk(self):
         # 按照以下路径顺序寻找config.json文件

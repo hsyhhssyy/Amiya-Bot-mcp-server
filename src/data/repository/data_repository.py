@@ -40,10 +40,12 @@ class DataRepository:
 
     def __post_init__(self):
         # 约定：cfg.GameDataPath 指向resources, 解包数据根目录（里面有 excel/character_table.json 等）
+        if self.cfg.GameDataPath is None:
+            raise ValueError("GameDataPath must be configured")
+        if self.cfg.GameDataRepo is None:
+            raise ValueError("GameDataRepo must be configured")
+        
         data_root = Path(self.cfg.GameDataPath)
-
-        # maintainer 的根目录/参数你要确保与 update() 的实现一致
-        # 这里按你原来写法：把 repo 拉到 GameDataPath 的父目录
         self._maintainer = GitGameDataMaintainer(self.cfg.GameDataRepo, data_root)
 
     # ---------- public ----------
@@ -130,6 +132,12 @@ class DataRepository:
         return self._load_bundle_from_disk()
 
     def _load_bundle_from_disk(self) -> DataBundle:
+        
+        if self.cfg.GameDataPath is None:
+            raise ValueError("GameDataPath must be configured")
+        if self.cfg.ProjectRoot is None:
+            raise ValueError("ProjectRoot must be configured")
+        
         # 1) 读取表
         tables: Dict[str, Any] = {}
         for name, folder in [
