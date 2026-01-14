@@ -1,12 +1,12 @@
 # src/app/bootstrap.py
 from pathlib import Path
-from src.app.context import AppContext
-from src.config.model import Config
-from src.app.renderers.jinja_template_loader import JinjaTemplateLoader
-from src.app.renderers.jinja_text_renderer import JinjaTextRenderer
-from src.app.renderers.jinja_json_renderer import JinjaJsonRenderer
 import logging
-from src.data.repository.data_repository import DataRepository
+from ..app.context import AppContext
+from ..config.model import Config
+from ..app.renderers.jinja_template_loader import JinjaTemplateLoader
+from ..app.renderers.jinja_text_renderer import JinjaTextRenderer
+from ..app.renderers.jinja_json_renderer import JinjaJsonRenderer
+from ..data.repository.data_repository import DataRepository
 
 logger = logging.getLogger(__name__)
 

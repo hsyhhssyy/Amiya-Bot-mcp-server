@@ -2,8 +2,8 @@
 from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 
-from src.adapters.mcp.mcp_tools.arknights_glossary import register_glossary_tool
-from src.adapters.mcp.mcp_tools.operator_basic import register_operator_basic_tool
+from .mcp_tools.arknights_glossary import register_glossary_tool
+from .mcp_tools.operator_basic import register_operator_basic_tool
 
 def register_asgi(app: FastAPI):
 

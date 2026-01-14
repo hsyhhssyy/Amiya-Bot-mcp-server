@@ -7,13 +7,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from src.config.model import Config
-from src.data.loader._git_gamedata_maintainer import GitGameDataMaintainer
-from src.data.models.bundle import DataBundle
-from src.data.models._operator_impl import OperatorImpl
-from src.domain.models.operator import Operator
-from src.domain.models.token import Token
-from src.helpers.bundle_helper import build_range, html_tag_format
+from ...config.model import Config
+from ...data.loader._git_gamedata_maintainer import GitGameDataMaintainer
+from ...data.models.bundle import DataBundle
+from ...data.models._operator_impl import OperatorImpl
+from ...domain.models.operator import Operator
+from ...domain.models.token import Token
+from ...helpers.bundle_helper import build_range, html_tag_format
 
 log = logging.getLogger(__name__)
 
@@ -39,12 +39,12 @@ class DataRepository:
     _update_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     def __post_init__(self):
-        # 约定：cfg.GameDataPath 指向解包数据根目录（里面有 excel/character_table.json 等）
+        # 约定：cfg.GameDataPath 指向resources, 解包数据根目录（里面有 excel/character_table.json 等）
         data_root = Path(self.cfg.GameDataPath)
 
         # maintainer 的根目录/参数你要确保与 update() 的实现一致
         # 这里按你原来写法：把 repo 拉到 GameDataPath 的父目录
-        self._maintainer = GitGameDataMaintainer(self.cfg.GameDataRepo, data_root.parent)
+        self._maintainer = GitGameDataMaintainer(self.cfg.GameDataRepo, data_root)
 
     # ---------- public ----------
 
@@ -142,7 +142,7 @@ class DataRepository:
             ("charword_table", "excel"),
             ("char_meta_table", "excel"),
         ]:
-            exact_folder = Path(self.cfg.GameDataPath) / folder
+            exact_folder = Path(self.cfg.GameDataPath) / 'gamedata' / folder
             tables[name] = self._read_json(name, str(exact_folder)) or {}
 
         # 2) 添加常量表

@@ -2,9 +2,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from src.config.model import Config
-from src.data.repository.data_repository import DataRepository
-from src.app.renderers.types import Renderer
+from ..config.model import Config
+from ..data.repository.data_repository import DataRepository
+from ..app.renderers.types import Renderer
 
 @dataclass(slots=True)
 class AppContext:

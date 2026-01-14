@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from src.domain.models.operator import Operator
-from src.helpers.bundle_helper import *
+from ...domain.models.operator import Operator
+from ...helpers.bundle_helper import *
 
 
 @dataclass(frozen=True, slots=True)

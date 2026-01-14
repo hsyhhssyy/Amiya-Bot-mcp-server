@@ -1,6 +1,6 @@
 from typing import Dict
-from src.domain.models.operator import Operator, STR_DICT, LIST_STR_DICT
-from src.helpers.bundle_helper import *
+from ...domain.models.operator import Operator, STR_DICT, LIST_STR_DICT
+from ...helpers.bundle_helper import *
 
 class OperatorImpl(Operator):
     def __init__(

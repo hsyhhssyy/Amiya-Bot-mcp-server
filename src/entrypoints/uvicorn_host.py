@@ -6,9 +6,9 @@ import uvicorn
 import asyncio
 import logging
 
-from src.app.bootstrap_disk import build_context_from_disk
-from src.adapters.mcp.app import register_asgi
-from src.app.context import AppContext
+from ..app.bootstrap_disk import build_context_from_disk
+from ..adapters.mcp.app import register_asgi
+from ..app.context import AppContext
 
 log = logging.getLogger("asset")
 

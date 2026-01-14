@@ -1,8 +1,11 @@
+# src/config/model.py
 import json
 import os
 from pathlib import Path
 
 from dataclasses import dataclass
+
+FILE_PATH = Path(__file__).parent.parent.parent.resolve()
 
 @dataclass
 class Config:
@@ -17,9 +20,9 @@ class Config:
         # 3. data子目录
         # 未发现则抛出异常
         possible_paths = [
-            Path.cwd() / 'config.json',
-            Path.cwd() / 'resources' / 'config.json',
-            Path.cwd() / 'data' / 'config.json'
+            FILE_PATH / 'config.json',
+            FILE_PATH / 'resources' / 'config.json',
+            FILE_PATH / 'data' / 'config.json'
         ]
         for path in possible_paths:
             if path.exists():
@@ -27,6 +30,11 @@ class Config:
                     config = json.load(f)
                     self.GameDataPath = config.get('GameDataPath', '')
                     self.GameDataRepo = config.get('GameDataRepo', '')
+
+                    if self.GameDataPath == '':
+                        # 如果配置文件中没有指定 GameDataPath，则使用默认路径
+                        self.GameDataPath = str((FILE_PATH / 'resources').resolve())
+
                     return
 
     def load_from_astrbot_config(self,astr_config):

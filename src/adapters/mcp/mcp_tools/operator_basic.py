@@ -1,6 +1,10 @@
-from src.domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
-from src.app.renderers.types import Renderer
+import json
 import logging
+
+from ....helpers.renderer import render_with_best_renderer
+from ....app.context import AppContext
+from ....domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
+from ....app.renderers.types import Renderer
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +26,10 @@ def register_operator_basic_tool(mcp, app):
             logger.exception("查询失败")
             return "查询失败"
 
-        payload = context.json_renderer.render("operator_basic", result).payload
+        # 优先json_renderer,然后text_renderer,然后直接json format
+
+        payload = render_with_best_renderer(context, "operator_basic", result, ensure_ascii=False)
 
         logger.info(payload)
 
-        return json.dumps(payload)
+        return payload

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import List
-from src.app.context import AppContext
+from ..app.context import AppContext
 
 # 直接把你原来的实现挪过来（这里假设函数体不变）
 def mark_glossary_used_terms(context: AppContext, text: str) -> List[str]:

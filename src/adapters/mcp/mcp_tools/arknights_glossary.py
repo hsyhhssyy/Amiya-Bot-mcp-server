@@ -4,7 +4,7 @@ import logging
 from typing import Annotated,List,Union
 from pydantic import Field
 
-from src.app.context import AppContext
+from ....app.context import AppContext
 
 logger = logging.getLogger("mcp_tool")
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from src.app.renderers.types import Renderer,RenderOutput
-from src.app.renderers.jinja_template_loader import JinjaTemplateLoader
-from src.domain.types import QueryResult
+from ...app.renderers.types import Renderer,RenderOutput
+from ...app.renderers.jinja_template_loader import JinjaTemplateLoader
+from ...domain.types import QueryResult
 import logging
 
 logger = logging.getLogger(__name__)

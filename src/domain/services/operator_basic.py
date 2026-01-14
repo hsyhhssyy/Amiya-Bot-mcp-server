@@ -1,10 +1,10 @@
 from __future__ import annotations
-
-from src.app.context import AppContext
-from src.domain.models.operator import Operator
-from src.domain.types import QueryResult
-from src.helpers.glossary import mark_glossary_used_terms
 import logging
+
+from ...app.context import AppContext
+from ...domain.models.operator import Operator
+from ...domain.types import QueryResult
+from ...helpers.glossary import mark_glossary_used_terms
 
 logger = logging.getLogger(__name__)
 

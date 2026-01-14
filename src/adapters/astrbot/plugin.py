@@ -2,8 +2,8 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger,AstrBotConfig
 
-from src.app.bootstrap_astrbot import build_context_from_astrbot
-from src.app.context import AppContext
+from ...app.bootstrap_astrbot import build_context_from_astrbot
+from ...app.context import AppContext
 
 class MyPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):

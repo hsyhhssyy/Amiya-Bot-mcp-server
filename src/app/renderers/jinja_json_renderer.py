@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from src.app.renderers.types import RenderOutput
-from src.app.renderers.jinja_template_loader import JinjaTemplateLoader
-from src.app.renderers.types import Renderer
-from src.domain.types import QueryResult
+from ...app.renderers.types import RenderOutput
+from ...app.renderers.jinja_template_loader import JinjaTemplateLoader
+from ...app.renderers.types import Renderer
+from ...domain.types import QueryResult
 
 
 class JinjaJsonRenderer(Renderer):
