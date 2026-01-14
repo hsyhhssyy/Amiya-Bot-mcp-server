@@ -1,6 +1,7 @@
 {
   "GameDataRepo": {
     "description": "GameDataRepo",
-    "type": "string"
+    "type": "string",
+    "default":"https://gitee.com/amiya-bot/amiya-bot-assets.git"
   }
 }
