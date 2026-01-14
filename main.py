@@ -7,6 +7,7 @@ from astrbot.api import logger,AstrBotConfig
 from src.app.bootstrap_astrbot import build_context_from_astrbot
 from src.app.context import AppContext
 
+@register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
