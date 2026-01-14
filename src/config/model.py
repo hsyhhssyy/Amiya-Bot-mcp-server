@@ -48,9 +48,15 @@ class Config:
         
         # 获取当前插件目录的绝对路径
         PLUGIN_DIR = Path(__file__).parent.absolute()
-        PLUGIN_DATA_DIR = (PLUGIN_DIR / ".." / ".." / "amiyabot_resources").resolve()
-        # GameDataPath 是下面的ArknightsGameData文件夹
-        self.GameDataPath = str(PLUGIN_DATA_DIR / "ArknightsGameData")
+        PLUGIN_DATA_DIR = (PLUGIN_DIR / ".." / ".." / ".." / ".." / "plugin_data" / "amiya_bot_mcp_server" ).resolve()
+        
+        # 官方的代码是
+        # from astrbot.core.utils.astrbot_path import get_astrbot_data_path
+        # plugin_data_path = get_astrbot_data_path() / "plugin_data" / self.name
+        # 但是这里为了避免引用Astrbot内部代码，直接构造路径
+
+        self.GameDataPath = str(PLUGIN_DATA_DIR)
+
         return
         
 config = Config()
