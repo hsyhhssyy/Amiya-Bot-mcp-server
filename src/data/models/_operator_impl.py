@@ -1,5 +1,7 @@
-from typing import Dict
-from ...domain.models.operator import Operator, STR_DICT, LIST_STR_DICT
+# src/data/models/_operator_impl.py
+from typing import Dict, Any, List
+from ...domain.models.operator import Operator,OperatorPhase, Skill, SkillLevel, SkillSpData, OperatorModule, STR_DICT, LIST_STR_DICT
+from ...domain.models.generic import Cost, MaterialCost, parse_cost
 from ...helpers.bundle import *
 
 class OperatorImpl(Operator):
@@ -82,7 +84,7 @@ class OperatorImpl(Operator):
         self.is_classic = bool(data.get("classicPotentialItemId"))
         self.is_sp = bool(data.get("isSpChar"))
 
-        # tags / range / drawer / cv / origin 等：这里做“轻量初始化”
+        self._init_phases(data)
         self._init_tags(data, tables)
         self._init_range(data, tables)
         self.cv = {}
@@ -91,6 +93,11 @@ class OperatorImpl(Operator):
         self._init_detail(data, tables)
         self._init_talents(data, tables)
         self._init_skills(data, tables)
+        self._init_modules(tables)   # <- 新增这一行（放 skills 后面就行）
+
+    def _init_phases(self, data):
+        raw = data.get("phases") or []
+        self.phases = [OperatorPhase.from_gamedata(i, p) for i, p in enumerate(raw)]
 
     def _init_tags(self, data, tables):
         tags = [self.classes, self.type]
@@ -100,15 +107,16 @@ class OperatorImpl(Operator):
         self.tags = (data.get("tagList") or []) + tags
 
     def _init_range(self, data, tables):
-        # 旧逻辑：取最后 phase 的 rangeId
         range_table = get_table(tables, "range_table", source="gamedata", default={})
-        phases = data.get("phases") or []
-        if not phases:
+
+        if not self.phases:
             self.range = "无范围"
             return
-        range_id = phases[-1].get("rangeId")
+
+        range_id = self.phases[-1].range_id
         grids = range_table.get(range_id, {}).get("grids")
         self.range = build_range(grids) if grids else "无范围"
+
 
     def _init_cv(self, tables):
         word_data = get_table(tables, "charword_table", source="gamedata", default={})
@@ -126,54 +134,23 @@ class OperatorImpl(Operator):
                 return
 
     # ------------------ domain 接口实现（先做可用版，复杂聚合可逐步补齐） ------------------
-    def summary(self) -> STR_DICT:
-        return {
-            "id": self.id,
-            "name": self.name,
-            "en_name": self.en_name,
-            "rarity": self.rarity,
-            "classes": self.classes,
-            "classes_sub": self.classes_sub,
-            "classes_code": self.classes_code,
-            "type": self.type,
-        }
 
-    def _init_detail(self,data,tables):
-        # 你旧项目 detail() 返回 (detail, favor) 两份；这里先合成一份 dict
+    def _init_detail(self, data, tables):
         items = get_table(tables, "item_table", source="gamedata", default={}).get("items", {})
-        token_id = "p_" + self.id
-        token = items.get(token_id)
+        token = items.get("p_" + self.id)
 
-        phases = data.get("phases") or []
-        max_level = ""
-        max_attr = {}
-        if phases:
-            max_phases = phases[-1]
-            max_level = f"{len(phases)-1} - {max_phases.get('maxLevel', '')}"
-            kfs = (max_phases.get("attributesKeyFrames") or [])
-            if kfs:
-                max_attr = (kfs[-1].get("data") or {})
+        # max_level
+        self.max_level = ""
+        if self.phases:
+            last = self.phases[-1]
+            self.max_level = f"{last.phase_index} - {last.max_level}"
 
         trait = html_tag_format(data.get("description") or "")
-        if data.get("trait"):
-            cand = (data["trait"].get("candidates") or [])
-            if cand:
-                max_trait = cand[-1]
-                trait = parse_template(max_trait.get("blackboard") or [], max_trait.get("overrideDescripton") or trait)
-
-        out = {
-            "operator_trait": trait.replace("\\n", "\n"),
-            "operator_usage": data.get("itemUsage") or "",
-            "operator_quote": data.get("itemDesc") or "",
-            "operator_token": token.get("description", "") if token else "",
-            "max_level": max_level,
-            **max_attr,
-        }
-
-        self._detail = out
-    
-    def detail(self) -> STR_DICT:
-        return self._detail
+        # 你 trait 解析逻辑不变...
+        self.operator_trait = (trait or "").replace("\\n", "\n")
+        self.operator_usage = data.get("itemUsage") or ""
+        self.operator_quote = data.get("itemDesc") or ""
+        self.operator_token = token.get("description", "") if token else ""
 
     def _init_talents(self, data, tables):
         talents = []
@@ -187,25 +164,140 @@ class OperatorImpl(Operator):
     def talents(self) -> LIST_STR_DICT:
         return self._talents
 
-    def _init_skills(self, data, tables):
-        # 这里给一个“简版”，保留你后续扩展空间
-        skill_table = tables.get("skill_table") or {}
-        out = []
-        for idx, sk in enumerate(data.get("skills") or []):
+    def _init_skills(self, data: dict, tables: dict):
+        skill_table = get_table(tables, "skill_table", source="gamedata", default={})
+        range_table = get_table(tables, "range_table", source="gamedata", default={})
+
+        # Lv2..Lv7 通用升级材料：level -> costs
+        common_cost_by_level: dict[int, list[Cost]] = {}
+        for idx, item in enumerate(data.get("allSkillLvlup") or []):
+            level = idx + 2  # 2..7
+            costs = [
+                parse_cost(c)
+                for c in (item.get("lvlUpCost") or [])
+            ]
+            common_cost_by_level[level] = costs
+
+        skills: list[Skill] = []
+
+        for sidx, sk in enumerate(data.get("skills") or []):
             sid = sk.get("skillId")
             if not sid or sid not in skill_table:
                 continue
-            detail = skill_table[sid]
+
+            detail = skill_table[sid] or {}
+            raw_levels = detail.get("levels") or []
+            if not raw_levels:
+                continue
+
             icon = detail.get("iconId") or detail.get("skillId") or sid
-            out.append({"skill_no": sid, "skill_index": idx + 1, "skill_name": (detail.get("levels") or [{}])[0].get("name", ""), "skill_icon": icon})
-        self._skills = out
 
-    def skills(self) -> LIST_STR_DICT:
-        return self._skills
+            # 专精材料：index 0..2 -> level 8..10
+            spec_cost_by_level: dict[int, list[Cost]] = {}
+            spec_data = sk.get("specializeLevelUpData") or sk.get("levelUpCostCond") or []
+            for i, cond in enumerate(spec_data):
+                level = 8 + i  # 8..10
+                spec_cost_by_level[level] = [
+                    parse_cost(c)
+                    for c in (cond.get("levelUpCost") or [])
+                ]
 
-    def modules(self) -> LIST_STR_DICT:
-        # 旧项目 modules() 依赖 uniequip_table/battle_equip_table，先给空，后续可按旧逻辑补齐
-        return []
+            levels: list[SkillLevel] = []
+
+            for i, lev in enumerate(raw_levels):
+                level_no = i + 1  # 1..10（包含专精）
+                mastery = 0
+                if level_no >= 8:
+                    mastery = level_no - 7  # 8->1, 9->2, 10->3
+
+                # desc 模板替换 + 格式化
+                bb = lev.get("blackboard") or []
+                raw_desc = lev.get("description") or ""
+                desc = parse_template(bb, raw_desc) if raw_desc else raw_desc
+                desc = html_tag_format(desc).replace("\\n", "\n")
+
+                # range：优先技能rangeId，否则 fallback 干员自身 range
+                skill_range = self.range
+                rid = lev.get("rangeId")
+                if rid and rid in range_table:
+                    grids = range_table[rid].get("grids")
+                    if grids:
+                        skill_range = build_range(grids)
+
+                spd = lev.get("spData") or {}
+                sp = SkillSpData(
+                    sp_type=str(spd.get("spType") or ""),
+                    init_sp=int(spd.get("initSp") or 0),
+                    sp_cost=int(spd.get("spCost") or 0),
+                    max_charge_time=int(spd.get("maxChargeTime") or 0),
+                    increment=float(spd.get("increment") or 0.0),
+                )
+
+                # costs：按等级贴
+                costs: list[Cost] = []
+                if 2 <= level_no <= 7:
+                    costs = common_cost_by_level.get(level_no, [])
+                elif 8 <= level_no <= 10:
+                    costs = spec_cost_by_level.get(level_no, [])
+
+                levels.append(
+                    SkillLevel(
+                        level=level_no,
+                        mastery=mastery,
+                        name=str(lev.get("name") or ""),
+                        skill_type=str(lev.get("skillType") or ""),
+                        duration=float(lev.get("duration") or 0.0),
+                        duration_type=str(lev.get("durationType") or ""),
+                        range=skill_range,
+                        description=desc,
+                        sp=sp,
+                        costs=costs,
+                    )
+                )
+
+            skills.append(
+                Skill(
+                    skill_id=sid,
+                    skill_index=sidx + 1,
+                    icon=str(icon),
+                    name=str(raw_levels[0].get("name") or ""),
+                    levels=levels,
+                )
+            )
+
+        self._skills = skills
+
+    def _init_modules(self, tables: Dict[str, Any]):
+        uniequip = get_table(tables, "uniequip_table", source="gamedata", default={})
+        battle = get_table(tables, "battle_equip_table", source="gamedata", default={})
+
+        equip_dict = (uniequip.get("equipDict") or {}) if isinstance(uniequip, dict) else {}
+        char_equip = (uniequip.get("charEquip") or {}) if isinstance(uniequip, dict) else {}
+        mission_dict = (uniequip.get("missionList") or {}) if isinstance(uniequip, dict) else {}
+
+        # 这个表有时会长这样：battle["uniequip_002_mgllan"] = {"phases":[...]}
+        battle_dict = battle if isinstance(battle, dict) else {}
+
+        module_ids = char_equip.get(self.id) or []
+        modules: list[OperatorModule] = []
+
+        for mid in module_ids:
+            base = equip_dict.get(mid)
+            if not base:
+                continue
+
+            # 重要：不要改 base（它来自全局表），直接喂给 from_gamedata（内部会 dict(...)）
+            m = OperatorModule.from_gamedata(
+                base=base,
+                battle_detail=battle_dict.get(mid) or {},
+                mission_dict=mission_dict,
+            )
+            modules.append(m)
+
+        # 可选：按 charEquipOrder 排序，保证稳定输出
+        modules.sort(key=lambda x: x.char_equip_order)
+
+        self.modules = modules
 
     def skins(self) -> LIST_STR_DICT:
         # 旧项目 skins() 依赖 Collection 皮肤列表；你可以把 skins 表在 load_bundle 阶段预处理塞进 tables，再在这里生成

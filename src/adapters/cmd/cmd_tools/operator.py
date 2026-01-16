@@ -1,19 +1,26 @@
 
 import logging
 
+from ....domain.services.operator import search_operator_by_name
+
+from ....domain.types import QueryResult
+
+
 from ....app.context import AppContext
 from ....domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
+from ....domain.models.operator import Operator
 from ....helpers.renderer import render_with_best_renderer
 from ..registery import register_command
+from ....helpers.gamedata.search import search_source_spec, build_sources
 
 logger = logging.getLogger(__name__)
 
-@register_command("operator")
+@register_command("op")
 async def cmd_operator(ctx: AppContext, args: str) -> str:
     """
     查询干员信息
-    用法: operator <干员名> [prefix]
-    例子: operator 阿米娅
+    用法: op <干员名> [prefix]
+    例子: op 阿米娅
     """
     if not args:
         return "❌ 请提供干员名称\n用法: operator <干员名> [prefix]"
@@ -25,17 +32,36 @@ async def cmd_operator(ctx: AppContext, args: str) -> str:
     try:
         logger.info(f"查询干员: {operator_name_prefix}{operator_name}")
         
-        result = get_operator_basic_core(ctx, operator_name, operator_name_prefix)
-        
-        # 使用渲染器格式化输出
-        payload = render_with_best_renderer(
-            ctx, 
-            "operator_basic", 
-            result, 
-            ensure_ascii=False
+        operator_query = operator_name_prefix + operator_name
+
+        search_sources = build_sources(ctx.data_repository.get_bundle(), source_key=["name"])
+        search_results = search_source_spec(
+            operator_query,
+            sources=search_sources
         )
+
+        if not search_results:
+            raise OperatorNotFoundError(f"未找到干员: {operator_query}")
+        elif len(search_results.matches) > 1:
+            # 交互式选择结果
+            matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
+            return f"❌ 找到多个匹配的干员名称: {', '.join(matched_names)}，请提供更精确的名称。"
         
-        return f"✅ 查询结果：\n{payload}"
+        op: Operator = search_results.by_key("name")[0].value
+
+        result = search_operator_by_name(ctx, op.name)
+
+        # html 渲染
+        render_result = ctx.html_renderer.render("operator_info", result)
+
+        # 将渲染结果落在磁盘
+        destPath = f"{ctx.cfg.GameDataPath}/temp"
+
+        with open(destPath + f"/{op.name}.html", "wb") as f:
+            f.write(render_result.payload.encode("utf-8"))
+
+
+        return f"✅ 查询结果：\n{op.__dict__}"
         
     except OperatorNotFoundError as e:
         return f"❌ {str(e)}"

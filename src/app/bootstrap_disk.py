@@ -1,6 +1,8 @@
 # src/app/bootstrap.py
 from pathlib import Path
 import logging
+
+from ..app.renderers.jinja_html_renderer import JinjaHtmlRenderer
 from ..app.context import AppContext
 from ..config.model import Config
 from ..app.renderers.jinja_template_loader import JinjaTemplateLoader
@@ -17,17 +19,20 @@ async def build_context_from_disk() -> AppContext:
     project_root = Path(__file__).resolve().parents[2] 
     cfg.ProjectRoot = project_root
 
-    ctx = AppContext(cfg=cfg)
 
     data_repo = DataRepository(
         cfg=cfg,
     )
     await data_repo.startup_prepare(True)
-    ctx.data_repository = data_repo
 
+    ctx = AppContext(
+        cfg=cfg,
+        data_repository=data_repo
+    )
     templates_root = cfg.ProjectRoot / "data" / "templates" 
     loader = JinjaTemplateLoader(str(templates_root))
     ctx.text_renderer = JinjaTextRenderer(loader)
     ctx.json_renderer = JinjaJsonRenderer(loader)
+    ctx.html_renderer = JinjaHtmlRenderer(loader)
 
     return ctx
