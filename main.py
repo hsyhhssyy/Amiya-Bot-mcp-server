@@ -1,11 +1,11 @@
 import logging
 
-from astrbot.api.event import filter, AstrMessageEvent
+# from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
 
 # from .src.app.bootstrap_astrbot import build_context_from_astrbot
-from .src.app.context import AppContext
+# from .src.app.context import AppContext
 
 # from .src.helpers.gamedata.search import search_source_spec, build_sources
 
@@ -18,8 +18,8 @@ class AmiyaBotAstrbotPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         
-        self._astrbot_config = config
-        self.ctx: AppContext | None = None
+        # self._astrbot_config = config
+        # self.ctx: AppContext | None = None
 
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
