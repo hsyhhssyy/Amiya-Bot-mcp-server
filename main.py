@@ -11,7 +11,7 @@ from astrbot.api import logger,AstrBotConfig # 使用 astrbot 提供的 logger �
 # from .src.domain.models.operator import Operator
 
 class AmiyaBotAstrbotPlugin(Star):
-    def __init__(self, context: Context, config: AstrBotConfig):
+    def __init__(self, context: Context):
         super().__init__(context)
         
         # self._astrbot_config = config
