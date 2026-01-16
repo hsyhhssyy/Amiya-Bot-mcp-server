@@ -1,6 +1,6 @@
 from typing import Dict
 from ...domain.models.operator import Operator, STR_DICT, LIST_STR_DICT
-from ...helpers.bundle_helper import *
+from ...helpers.bundle import *
 
 class OperatorImpl(Operator):
     def __init__(
@@ -11,23 +11,19 @@ class OperatorImpl(Operator):
         is_recruit: bool = False,
     ):
         super().__init__()
-        self._tables = tables
-        self._raw = data  # 如你愿意可去掉
 
-        # 旧逻辑依赖的表
-        sub_classes = (tables.get("uniequip_table") or {}).get("subProfDict", {})
-        character_table = tables.get("character_table") or {}
-        team_table = tables.get("handbook_team_table") or {}
-        items = (tables.get("item_table") or {}).get("items", {})
+        sub_classes = get_table(tables, "uniequip_table", source="gamedata", default={}).get("subProfDict", {})
+        character_table = get_table(tables, "character_table", source="gamedata", default={})
+        team_table = get_table(tables, "handbook_team_table", source="gamedata", default={})
+        items = get_table(tables, "item_table", source="gamedata", default={}).get("items", {})
 
         data["name"] = (data.get("name") or "").strip()
 
         self.id = op_id
-        self.cv = {}
 
         # type / rarity / number
         pos = data.get("position")
-        self.type = tables.get("types", {}).get(pos, "未知")
+        self.type = get_table(tables, "types", source="local", default={}).get(pos, "未知")
 
         rarity_raw = data.get("rarity", 0)
         if isinstance(rarity_raw, str):
@@ -52,7 +48,7 @@ class OperatorImpl(Operator):
         # classes
         prof = data.get("profession")
         self.classes_code = prof or ""
-        self.classes = tables.get("classes", {}).get(prof, "未知")
+        self.classes = get_table(tables, "classes", source="local", default={}).get(prof, "未知")
 
         sub_prof_id = data.get("subProfessionId")
         self.classes_sub = sub_classes.get(sub_prof_id, {}).get("subProfessionName", "未知")
@@ -79,30 +75,34 @@ class OperatorImpl(Operator):
             self.potential_item = items[pid].get("description", "")
 
         # flags
-        self.limit = self.name in tables.get("limit", [])
-        self.unavailable = self.name in tables.get("unavailable", [])
+        self.limit = self.name in get_table(tables, "limit", source="amiyabot", default=[])
+        self.unavailable = self.name in get_table(tables, "unavailable", source="amiyabot", default=[])
 
         self.is_recruit = is_recruit
         self.is_classic = bool(data.get("classicPotentialItemId"))
         self.is_sp = bool(data.get("isSpChar"))
 
         # tags / range / drawer / cv / origin 等：这里做“轻量初始化”
-        self._init_tags()
-        self._init_range()
-        self._init_cv()
-        self._init_origin(character_table)
+        self._init_tags(data, tables)
+        self._init_range(data, tables)
+        self.cv = {}
+        self._init_cv(tables)
+        self._init_origin(character_table, data, tables)
+        self._init_detail(data, tables)
+        self._init_talents(data, tables)
+        self._init_skills(data, tables)
 
-    def _init_tags(self):
+    def _init_tags(self, data, tables):
         tags = [self.classes, self.type]
-        hs = self._tables.get("high_star", {})
+        hs = get_table(tables, "rarity_tags", source="local", default={})
         if str(self.rarity) in hs:
             tags.append(hs[str(self.rarity)])
-        self.tags = (self._raw.get("tagList") or []) + tags
+        self.tags = (data.get("tagList") or []) + tags
 
-    def _init_range(self):
+    def _init_range(self, data, tables):
         # 旧逻辑：取最后 phase 的 rangeId
-        range_table = self._tables.get("range_table") or {}
-        phases = self._raw.get("phases") or []
+        range_table = get_table(tables, "range_table", source="gamedata", default={})
+        phases = data.get("phases") or []
         if not phases:
             self.range = "无范围"
             return
@@ -110,16 +110,16 @@ class OperatorImpl(Operator):
         grids = range_table.get(range_id, {}).get("grids")
         self.range = build_range(grids) if grids else "无范围"
 
-    def _init_cv(self):
-        word_data = self._tables.get("charword_table") or {}
+    def _init_cv(self, tables):
+        word_data = get_table(tables, "charword_table", source="gamedata", default={})
         # 按旧逻辑读取 voiceLangDict
         vdict = (word_data.get("voiceLangDict") or {}).get(self.id, {}).get("dict", {})
         vtype = word_data.get("voiceLangTypeDict") or {}
         if vdict and vtype:
             self.cv = {vtype.get(k, {}).get("name", k): v.get("cvName", "") for k, v in vdict.items()}
 
-    def _init_origin(self, character_table: dict):
-        sp_char_groups = (self._tables.get("char_meta_table") or {}).get("spCharGroups") or {}
+    def _init_origin(self, character_table: dict, data, tables):
+        sp_char_groups = get_table(tables, "char_meta_table", source="local", default={}).get("spCharGroups") or {}
         for oid, group in sp_char_groups.items():
             if self.id in (group or []):
                 self.origin_name = character_table.get(oid, {}).get("name", "未知")
@@ -138,13 +138,13 @@ class OperatorImpl(Operator):
             "type": self.type,
         }
 
-    def detail(self) -> STR_DICT:
+    def _init_detail(self,data,tables):
         # 你旧项目 detail() 返回 (detail, favor) 两份；这里先合成一份 dict
-        items = (self._tables.get("item_table") or {}).get("items", {})
+        items = get_table(tables, "item_table", source="gamedata", default={}).get("items", {})
         token_id = "p_" + self.id
         token = items.get(token_id)
 
-        phases = self._raw.get("phases") or []
+        phases = data.get("phases") or []
         max_level = ""
         max_attr = {}
         if phases:
@@ -154,44 +154,54 @@ class OperatorImpl(Operator):
             if kfs:
                 max_attr = (kfs[-1].get("data") or {})
 
-        trait = html_tag_format(self._raw.get("description") or "")
-        if self._raw.get("trait"):
-            cand = (self._raw["trait"].get("candidates") or [])
+        trait = html_tag_format(data.get("description") or "")
+        if data.get("trait"):
+            cand = (data["trait"].get("candidates") or [])
             if cand:
                 max_trait = cand[-1]
                 trait = parse_template(max_trait.get("blackboard") or [], max_trait.get("overrideDescripton") or trait)
 
         out = {
             "operator_trait": trait.replace("\\n", "\n"),
-            "operator_usage": self._raw.get("itemUsage") or "",
-            "operator_quote": self._raw.get("itemDesc") or "",
+            "operator_usage": data.get("itemUsage") or "",
+            "operator_quote": data.get("itemDesc") or "",
             "operator_token": token.get("description", "") if token else "",
             "max_level": max_level,
             **max_attr,
         }
-        return out
 
-    def talents(self) -> LIST_STR_DICT:
+        self._detail = out
+    
+    def detail(self) -> STR_DICT:
+        return self._detail
+
+    def _init_talents(self, data, tables):
         talents = []
-        for item in self._raw.get("talents") or []:
+        for item in data.get("talents") or []:
             cand = item.get("candidates") or []
             if cand:
                 max_item = cand[-1]
                 talents.append({"talents_name": max_item.get("name", ""), "talents_desc": html_tag_format(max_item.get("description", ""))})
-        return talents
+        self._talents = talents
 
-    def skills(self) -> LIST_STR_DICT:
+    def talents(self) -> LIST_STR_DICT:
+        return self._talents
+
+    def _init_skills(self, data, tables):
         # 这里给一个“简版”，保留你后续扩展空间
-        skill_table = self._tables.get("skill_table") or {}
+        skill_table = tables.get("skill_table") or {}
         out = []
-        for idx, sk in enumerate(self._raw.get("skills") or []):
+        for idx, sk in enumerate(data.get("skills") or []):
             sid = sk.get("skillId")
             if not sid or sid not in skill_table:
                 continue
             detail = skill_table[sid]
             icon = detail.get("iconId") or detail.get("skillId") or sid
             out.append({"skill_no": sid, "skill_index": idx + 1, "skill_name": (detail.get("levels") or [{}])[0].get("name", ""), "skill_icon": icon})
-        return out
+        self._skills = out
+
+    def skills(self) -> LIST_STR_DICT:
+        return self._skills
 
     def modules(self) -> LIST_STR_DICT:
         # 旧项目 modules() 依赖 uniequip_table/battle_equip_table，先给空，后续可按旧逻辑补齐

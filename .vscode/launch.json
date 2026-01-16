@@ -6,6 +6,20 @@
     "configurations": [
 
         {
+            "name": "启动命令行模式（module）",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "Amiya-Bot-mcp-server.main",
+            "cwd": "${workspaceFolder}/..",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/.."
+            },
+            "console": "integratedTerminal",
+            "args": ["-C"],
+            "justMyCode": false
+            },
+
+        {
             "name": "启动 MCP 服务器（module）",
             "type": "debugpy",
             "request": "launch",
