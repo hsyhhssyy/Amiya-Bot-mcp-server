@@ -10,7 +10,6 @@ from .src.app.context import AppContext
 from .src.helpers.gamedata.search import search_source_spec, build_sources
 
 from .src.domain.services.operator import search_operator_by_name
-from .src.domain.services.operator_basic import  OperatorNotFoundError
 from .src.domain.models.operator import Operator
 
 logger = logging.getLogger(__name__)
@@ -71,9 +70,6 @@ class AmiyaBotAstrbotPlugin(Star):
 
             url = await self.html_render(TMPL, result.data, options={}) # 第二个参数是 Jinja2 的渲染数据
             yield event.image_result(url)
-            return
-        except OperatorNotFoundError as e:
-            yield event.plain_result("未找到干员!")
             return
         except Exception as e:
             logger.exception("查询干员信息失败")
