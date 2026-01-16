@@ -60,11 +60,13 @@ class AmiyaBotAstrbotPlugin(Star):
         print("AmiyaBotAstrbotPlugin resource root:", self.ctx.cfg.GameDataPath)
     
     @filter.command("查询")
-    async def operator_archives_operator_query(self, event: AstrMessageEvent,query_str: str):
+    async def operator_archives_operator_query(self, event: AstrMessageEvent):
 
         if not self.ctx or not self.ctx.cfg.ProjectRoot:
             yield event.plain_result("❌ 插件未初始化完成，请稍后再试。")
             return
+
+        query_str = event.message_str.strip()
 
         try:
             logger.info(f"查询干员: {query_str}")
