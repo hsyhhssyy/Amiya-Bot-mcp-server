@@ -5,7 +5,7 @@ from astrbot.api.star import Context, Star
 from astrbot.api import AstrBotConfig
 
 # from .src.app.bootstrap_astrbot import build_context_from_astrbot
-# from .src.app.context import AppContext
+from .src.app.context import AppContext
 
 # from .src.helpers.gamedata.search import search_source_spec, build_sources
 
