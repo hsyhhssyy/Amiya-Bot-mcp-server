@@ -49,6 +49,14 @@ class AmiyaBotAstrbotPlugin(Star,OperatorQueryMixin):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
         self.ctx = await build_context_from_astrbot(self._astrbot_config)
         print("AmiyaBotAstrbotPlugin resource root:", self.ctx.cfg.GameDataPath)
+    
+    @filter.command("干员查询")
+    async def operator_archives_operator_query(self, event: AstrMessageEvent):
+        user_name = event.get_sender_name()
+        message_str = event.message_str
+        yield event.plain_result(
+            f"Hello, {user_name}, 你发了 {message_str}!"
+        )
 
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
