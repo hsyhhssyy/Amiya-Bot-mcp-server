@@ -36,9 +36,9 @@ from astrbot.api import logger,AstrBotConfig
 
 from .src.app.bootstrap_astrbot import build_context_from_astrbot
 from .src.app.context import AppContext
-from .src.adapters.astrbot.operator import OperatorQueryMixin
+from .src.adapters.astrbot.operator import operator_archives_operator_query_impl
 
-class AmiyaBotAstrbotPlugin(Star,OperatorQueryMixin):
+class AmiyaBotAstrbotPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         
@@ -50,13 +50,7 @@ class AmiyaBotAstrbotPlugin(Star,OperatorQueryMixin):
         self.ctx = await build_context_from_astrbot(self._astrbot_config)
         print("AmiyaBotAstrbotPlugin resource root:", self.ctx.cfg.GameDataPath)
     
-    @filter.command("干员查询")
-    async def operator_archives_operator_query(self, event: AstrMessageEvent):
-        user_name = event.get_sender_name()
-        message_str = event.message_str
-        yield event.plain_result(
-            f"Hello, {user_name}, 你发了 {message_str}!"
-        )
+    operator_archives_operator_query = filter.command("干员查询")(operator_archives_operator_query_impl)
 
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
