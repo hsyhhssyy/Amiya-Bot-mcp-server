@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Any, Optional
 
-from .generic import Cost, MaterialCost, parse_cost
+from src.domain.models.generic import Cost, MaterialCost, parse_cost
 
 STR_DICT = Dict[str, Any]
 LIST_STR_DICT = List[STR_DICT]

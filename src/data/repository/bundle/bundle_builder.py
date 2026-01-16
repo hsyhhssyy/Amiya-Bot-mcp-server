@@ -6,12 +6,12 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ....config.model import Config
-from ....data.models.bundle import DataBundle
-from ....data.models._operator_impl import OperatorImpl
-from ....domain.models.operator import Operator
-from ....domain.models.token import Token
-from ....helpers.bundle import build_range, get_table, html_tag_format
+from src.config.model import Config
+from src.data.models.bundle import DataBundle
+from src.data.models._operator_impl import OperatorImpl
+from src.domain.models.operator import Operator
+from src.domain.models.token import Token
+from src.helpers.bundle import build_range, get_table, html_tag_format
 
 log = logging.getLogger(__name__)
 

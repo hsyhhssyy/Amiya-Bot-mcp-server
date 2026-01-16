@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
-from ...domain.types import QueryResult
+from src.domain.types import QueryResult
 
 
 @dataclass

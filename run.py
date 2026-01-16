@@ -4,7 +4,7 @@ from pathlib import Path
 import sys
 import argparse
 
-from .src.entrypoints.command_line import cmd_main
+from src.entrypoints.command_line import cmd_main
 
 logger = logging.getLogger(__name__)
 

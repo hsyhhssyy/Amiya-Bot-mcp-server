@@ -1,14 +1,14 @@
 from __future__ import annotations
 import logging
 
-from ...helpers.gamedata.search import build_sources, search_source_spec
+from src.helpers.gamedata.search import build_sources, search_source_spec
 
-from ...helpers.bundle import get_table
+from src.helpers.bundle import get_table
 
-from ...app.context import AppContext
-from ...domain.models.operator import Operator
-from ...domain.types import QueryResult
-from ...helpers.glossary import mark_glossary_used_terms
+from src.app.context import AppContext
+from src.domain.models.operator import Operator
+from src.domain.types import QueryResult
+from src.helpers.glossary import mark_glossary_used_terms
 
 logger = logging.getLogger(__name__)
 

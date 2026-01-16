@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Callable, List, Optional, Sequence
 
-from ...domain.models.operator import Operator
-from ...data.models.bundle import DataBundle
-from ...app.context import AppContext
+from src.domain.models.operator import Operator
+from src.data.models.bundle import DataBundle
+from src.app.context import AppContext
 
 MatchKind = Literal["exact", "contains", "similar"]
 

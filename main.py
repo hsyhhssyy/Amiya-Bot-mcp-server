@@ -1,12 +1,33 @@
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
-from astrbot.api.star import Context, Star, register
-from astrbot.api import logger,AstrBotConfig
+import asyncio
+import logging
+from pathlib import Path
+import sys
+import argparse
 
-class MyPlugin(Star):
-    def __init__(self, context: Context,config: AstrBotConfig):
-        super().__init__(context)
-        self._astrbot_config = config
-        # self.ctx: AppContext | None = None
+from src.entrypoints.command_line import cmd_main
 
-    async def terminate(self):
-        '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
+logger = logging.getLogger(__name__)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-C",
+        "--custom-mode",
+        action="store_true",
+        help="启动时进入命令行模式"
+    )
+    return parser.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    # 可以用环境变量 / 全局变量 / 配置传递
+    if args.custom_mode:
+        print("🚀 使用 -C 启动，进入命令行模式")
+        asyncio.run(cmd_main())
+        sys.exit(0)
+    else:
+        from .src.entrypoints.uvicorn_host import uvicorn_main
+        uvicorn_main()
+        sys.exit(0)
+

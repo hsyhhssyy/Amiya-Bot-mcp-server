@@ -1,10 +1,10 @@
 import json
 import logging
 
-from ....helpers.renderer import render_with_best_renderer
-from ....app.context import AppContext
-from ....domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
-from ....app.renderers.types import Renderer
+from src.helpers.renderer import render_with_best_renderer
+from src.app.context import AppContext
+from src.domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
+from src.app.renderers.types import Renderer
 
 logger = logging.getLogger(__name__)
 

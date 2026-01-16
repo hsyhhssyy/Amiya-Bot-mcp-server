@@ -2,13 +2,13 @@
 from pathlib import Path
 import logging
 
-from ..app.renderers.jinja_html_renderer import JinjaHtmlRenderer
-from ..app.context import AppContext
-from ..config.model import Config
-from ..app.renderers.jinja_template_loader import JinjaTemplateLoader
-from ..app.renderers.jinja_text_renderer import JinjaTextRenderer
-from ..app.renderers.jinja_json_renderer import JinjaJsonRenderer
-from ..data.repository.data_repository import DataRepository
+from src.app.renderers.jinja_html_renderer import JinjaHtmlRenderer
+from src.app.context import AppContext
+from src.config.model import Config
+from src.app.renderers.jinja_template_loader import JinjaTemplateLoader
+from src.app.renderers.jinja_text_renderer import JinjaTextRenderer
+from src.app.renderers.jinja_json_renderer import JinjaJsonRenderer
+from src.data.repository.data_repository import DataRepository
 
 logger = logging.getLogger(__name__)
 

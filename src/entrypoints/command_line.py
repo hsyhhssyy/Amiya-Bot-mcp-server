@@ -3,9 +3,9 @@
 import logging
 import sys
 
-from ..app.bootstrap_disk import build_context_from_disk
+from src.app.bootstrap_disk import build_context_from_disk
 
-from ..adapters.cmd.app import CommandLineInterface
+from src.adapters.cmd.app import CommandLineInterface
 
 logger = logging.getLogger(__name__)
 

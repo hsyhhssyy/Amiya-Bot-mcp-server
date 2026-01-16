@@ -1,11 +1,11 @@
 
 import logging
 
-from ...app.context import AppContext
+from src.app.context import AppContext
 
-from ...adapters.cmd.registery import register_command, command_registry
+from src.adapters.cmd.registery import register_command, command_registry
 
-from .cmd_tools.operator import *
+from src.adapters.cmd.cmd_tools.operator import *
 
 logger = logging.getLogger(__name__)
 

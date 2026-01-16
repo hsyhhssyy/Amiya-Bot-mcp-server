@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping
 
-from ...domain.models.operator import Operator
-from ...helpers.bundle import *
+from src.domain.models.operator import Operator
+from src.helpers.bundle import *
 
 @dataclass(frozen=True, slots=True)
 class DataBundle:

@@ -7,14 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from ...data.repository.bundle.bundle_builder import load_bundle_from_disk
-from ...config.model import Config
-from ...data.loader._git_gamedata_maintainer import GitGameDataMaintainer
-from ...data.models.bundle import DataBundle
-from ...data.models._operator_impl import OperatorImpl
-from ...domain.models.operator import Operator
-from ...domain.models.token import Token
-from ...helpers.bundle import build_range, html_tag_format
+from src.data.repository.bundle.bundle_builder import load_bundle_from_disk
+from src.config.model import Config
+from src.data.loader._git_gamedata_maintainer import GitGameDataMaintainer
+from src.data.models.bundle import DataBundle
+from src.data.models._operator_impl import OperatorImpl
+from src.domain.models.operator import Operator
+from src.domain.models.token import Token
+from src.helpers.bundle import build_range, html_tag_format
 
 log = logging.getLogger(__name__)
 

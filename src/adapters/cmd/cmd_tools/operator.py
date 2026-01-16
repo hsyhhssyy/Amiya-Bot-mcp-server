@@ -1,17 +1,17 @@
 
 import logging
 
-from ....domain.services.operator import search_operator_by_name
+from src.domain.services.operator import search_operator_by_name
 
-from ....domain.types import QueryResult
+from src.domain.types import QueryResult
 
 
-from ....app.context import AppContext
-from ....domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
-from ....domain.models.operator import Operator
-from ....helpers.renderer import render_with_best_renderer
-from ..registery import register_command
-from ....helpers.gamedata.search import search_source_spec, build_sources
+from src.app.context import AppContext
+from src.domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
+from src.domain.models.operator import Operator
+from src.helpers.renderer import render_with_best_renderer
+from src.adapters.cmd.registery import register_command
+from src.helpers.gamedata.search import search_source_spec, build_sources
 
 logger = logging.getLogger(__name__)
 
