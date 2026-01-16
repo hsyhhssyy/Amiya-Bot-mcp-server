@@ -1,6 +1,6 @@
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger # 使用 astrbot 提供的 logger 接口
+from astrbot.api import logger,AstrBotConfig # 使用 astrbot 提供的 logger 接口
 
 # from .src.app.bootstrap_astrbot import build_context_from_astrbot
 # from .src.app.context import AppContext
@@ -11,7 +11,7 @@ from astrbot.api import logger # 使用 astrbot 提供的 logger 接口
 # from .src.domain.models.operator import Operator
 
 class AmiyaBotAstrbotPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         
         # self._astrbot_config = config
