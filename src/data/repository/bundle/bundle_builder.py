@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.config.model import Config
+from src.app.config import Config
 from src.data.models.bundle import DataBundle
 from src.data.models._operator_impl import OperatorImpl
 from src.domain.models.operator import Operator
@@ -28,13 +28,13 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return {}
 
 
-def load_bundle_from_disk(cfg: Config) -> DataBundle:
-    if cfg.GameDataPath is None:
-        raise ValueError("GameDataPath must be configured")
+def load_bundle_from_disk(cfg: Config, version: str | None = None) -> DataBundle:
+    if cfg.ResourcePath is None:
+        raise ValueError("ResourcePath must be configured")
     if cfg.ProjectRoot is None:
         raise ValueError("ProjectRoot must be configured")
 
-    game_root = Path(cfg.GameDataPath) / "gamedata"
+    game_root = cfg.ResourcePath / "gamedata"
 
     # 1) 读取表
     tables: Dict[str, Any] = {}
@@ -69,9 +69,6 @@ def load_bundle_from_disk(cfg: Config) -> DataBundle:
     # 3) 构建
     tokens = _build_token(tables)
     operators, name_to_id, index_to_id = _build_operators(tables)
-
-    # 5) version
-    version = "unknown"
 
     return DataBundle(
         version=version,

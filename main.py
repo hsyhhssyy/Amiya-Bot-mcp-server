@@ -1,9 +1,11 @@
 import asyncio
 import logging
-from pathlib import Path
 import sys
 import argparse
 
+from pathlib import Path
+
+from src.entrypoints.uvicorn_host import uvicorn_main
 from src.entrypoints.command_line import cmd_main
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,6 @@ if __name__ == "__main__":
         asyncio.run(cmd_main())
         sys.exit(0)
     else:
-        from .src.entrypoints.uvicorn_host import uvicorn_main
         uvicorn_main()
         sys.exit(0)
 

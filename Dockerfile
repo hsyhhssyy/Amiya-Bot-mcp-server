@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -13,5 +13,14 @@ RUN apt-get install -y --no-install-recommends \
 COPY . /app
 
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN python -m pip install playwright==1.57.0
+
+RUN playwright install chromium
+
+RUN python -m pip show playwright
+RUN python -c "import sys; print('\n'.join(sys.path))"
+
+RUN python -m playwright install --with-deps
 
 CMD ["python", "main.py"]

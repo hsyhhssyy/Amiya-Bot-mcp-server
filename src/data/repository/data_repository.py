@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.data.repository.bundle.bundle_builder import load_bundle_from_disk
-from src.config.model import Config
+from src.app.config import Config
 from src.data.loader._git_gamedata_maintainer import GitGameDataMaintainer
 from src.data.models.bundle import DataBundle
 from src.data.models._operator_impl import OperatorImpl
@@ -40,13 +40,13 @@ class DataRepository:
     _update_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False, repr=False)
 
     def __post_init__(self):
-        # 约定：cfg.GameDataPath 指向resources, 解包数据根目录（里面有 excel/character_table.json 等）
-        if self.cfg.GameDataPath is None:
-            raise ValueError("GameDataPath must be configured")
+        # 约定：cfg.ResourcePath 指向resources, 解包数据根目录（里面有 excel/character_table.json 等）
+        if self.cfg.ResourcePath is None:
+            raise ValueError("ResourcePath must be configured")
         if self.cfg.GameDataRepo is None:
             raise ValueError("GameDataRepo must be configured")
         
-        data_root = Path(self.cfg.GameDataPath)
+        data_root = self.cfg.ResourcePath
         self._maintainer = GitGameDataMaintainer(self.cfg.GameDataRepo, data_root)
 
     # ---------- public ----------
@@ -116,7 +116,7 @@ class DataRepository:
 
     def _read_json(self, name: str, folder: str) -> Dict[str, Any]:
         """
-        直接读取文件：<GameDataPath>/<folder>/<name>.json
+        直接读取文件：<ResourcePath>/<folder>/<name>.json
         读不到/解析失败则返回 {}
         """
         path = Path(folder) / f"{name}.json"
@@ -130,4 +130,7 @@ class DataRepository:
             return {}
 
     def _load_bundle(self) -> DataBundle:
-        return load_bundle_from_disk(self.cfg)
+        version = None
+        if self._maintainer is not None:
+            version = self._maintainer.get_version(short=True, with_dirty=True)
+        return load_bundle_from_disk(self.cfg, version=version)
