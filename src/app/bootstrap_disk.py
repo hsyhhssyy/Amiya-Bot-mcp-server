@@ -10,8 +10,7 @@ from src.data.repository.data_repository import DataRepository
 
 logger = logging.getLogger(__name__)
 
-async def build_context_from_disk() -> AppContext:
-    cfg = load_from_disk()
+async def build_context_from_disk(cfg) -> AppContext:
 
     data_repo = DataRepository(
         cfg=cfg,

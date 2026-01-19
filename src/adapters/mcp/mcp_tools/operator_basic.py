@@ -1,6 +1,13 @@
 import json
 import logging
+from typing import Annotated
 
+from pydantic import Field
+
+from src.domain.models.operator import Operator
+from src.domain.services.operator import search_operator_by_name
+from src.helpers.card_urls import build_card_url
+from src.helpers.gamedata.search import build_sources, search_source_spec
 from src.helpers.renderer import render_with_best_renderer
 from src.app.context import AppContext
 from src.domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
@@ -10,7 +17,23 @@ logger = logging.getLogger(__name__)
 
 def register_operator_basic_tool(mcp, app):
     @mcp.tool(description="获取干员的基础信息和属性")
-    def get_operator_basic(operator_name: str, operator_name_prefix: str = "") -> str:
+    async def get_operator_basic(
+        operator_name: Annotated[str, Field(description='干员名')],
+        operator_name_prefix: Annotated[str, Field(description='干员名的前缀，没有则为空')] = '',
+    ) -> str:
+        """
+        获取干员的基础信息和属性。同时还附加一张包含干员信息和立绘的图片。
+
+        Args:
+            operator_name (str): 干员名
+            operator_name_prefix (str): 干员名的前缀，没有则为空，如干员假日威龙陈的前缀为“假日威龙”
+
+        Returns:
+            str: 一个Json对象，文本可读的干员信息包含在data字段中，图片的URL包含在image_url字段中。
+
+        Raises:
+            OperatorNotFoundError: 指定名称的干员未找到
+        """
         logger.info(f"查询干员基础信息：{operator_name_prefix}{operator_name}")
 
         if not getattr(app.state, "ctx", None):
@@ -19,17 +42,72 @@ def register_operator_basic_tool(mcp, app):
         context: AppContext = app.state.ctx
 
         try:
-            result = get_operator_basic_core(context, operator_name, operator_name_prefix)
+            operator_query = operator_name_prefix + operator_name
+
+            search_sources = build_sources(context.data_repository.get_bundle(), source_key=["name"])
+            search_results = search_source_spec(operator_query, sources=search_sources)
+
+            # 注意：你原本的判断是 len(search_results.matches) > 1
+            # 更稳：只看 name key 的命中
+            if not search_results:
+                return json.dumps({
+                    "message": f"未找到干员: {operator_query}"
+                })
+
+            name_matches = search_results.by_key("name")
+            if len(name_matches) != 1:
+                matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
+                return json.dumps({
+                    "message": f"找到多个匹配的干员名称，需要用户做出选择",
+                    "candidates": matched_names
+                })
         except OperatorNotFoundError as e:
-            return str(e)
+            return json.dumps({
+                "message": str(e)
+            })
         except Exception:
             logger.exception("查询失败")
-            return "查询失败"
+            return json.dumps({
+                "message": "查询干员信息时发生错误"
+            })
 
         # 优先json_renderer,然后text_renderer,然后直接json format
+        op: Operator = name_matches[0].value
 
-        payload = render_with_best_renderer(context, "operator_basic", result, ensure_ascii=False)
+        # TODO 领域查询，需要进行替换，目前该函数的目的是为了配合旧版模板
+        result = search_operator_by_name(context, op.name)
 
-        logger.info(payload)
+        # 生成 payload_key：要求包含 version
+        bundle = context.data_repository.get_bundle()
+        bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
 
-        return payload
+        payload_key = f"operator:{op.name}:{bundle_version}"
+
+        # ✅ 交给 CardService：如果磁盘已有 png，就直接命中返回；否则现场渲染
+        text_artifact = await context.card_service.get(
+            template="operator_info",
+            payload_key=payload_key,
+            payload=result,
+            format="txt",
+            params=None,
+        )
+
+        img_artifact = await context.card_service.get(
+            template="operator_info",
+            payload_key=payload_key,
+            payload=result,
+            format="png",
+            params=None,
+        )
+
+        image_url = build_card_url(
+            cfg=context.cfg,
+            template="operator_info",
+            payload_key=payload_key,
+            format="png",
+        )
+
+        return json.dumps({
+            "data": text_artifact.read_text(),
+            "image_url": image_url,
+        })

@@ -13,12 +13,14 @@ class Config:
     ProjectRoot: Path
     ResourcePath: Path
     GameDataRepo: Optional[str] = None
+    BaseUrl: Optional[str] = None
 
 def load_from_disk()-> Config:
 
     ProjectRoot = FILE_PATH
     ResourcePath = None
     GameDataRepo = None
+    BaseUrl = None
 
     # 按照以下路径顺序寻找config.json文件
     # 1. 当前工作目录
@@ -43,15 +45,19 @@ def load_from_disk()-> Config:
                     ResourcePath = Path(cfgResourcePath)
 
                 GameDataRepo = config.get('GameDataRepo', None)
+                BaseUrl = config.get('BaseUrl', None)
 
                 break
 
     if ResourcePath is None:
         raise FileNotFoundError("Could not find config.json in expected locations.")
+    
+
     return Config(
         ProjectRoot=ProjectRoot,
         ResourcePath=ResourcePath,
-        GameDataRepo=GameDataRepo
+        GameDataRepo=GameDataRepo,
+        BaseUrl=BaseUrl
     )
 
 

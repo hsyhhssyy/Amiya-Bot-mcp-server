@@ -13,7 +13,8 @@ class JinjaTextRenderer(Renderer):
         self.kind = "text"
 
     def render(self, template_name: str, result: QueryResult) -> RenderOutput:
-        ctx = {"r": result}
+        ctx = dict(result.data or {})
+        ctx["r"] = result
         text = self.loader.render_by_kind(
             kind="text", template_name=template_name, ext="txt", ctx=ctx
         )

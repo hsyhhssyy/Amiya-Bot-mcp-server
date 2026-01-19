@@ -14,8 +14,10 @@ class JinjaJsonRenderer(Renderer):
         self.kind = "json"
 
     def render(self, template_name: str, result: QueryResult) -> RenderOutput:
+        ctx = dict(result.data or {})
+        ctx["r"] = result
         rendered = self.loader.render_by_kind(
-            kind="json", template_name=template_name, ext="json", ctx={"r": result}
+            kind="json", template_name=template_name, ext="json", ctx=ctx
         ).strip()
 
         payload = json.loads(rendered)

@@ -265,7 +265,7 @@ class OperatorImpl(Operator):
                 )
             )
 
-        self._skills = skills
+        self.skills = skills
 
     def _init_modules(self, tables: Dict[str, Any]):
         uniequip = get_table(tables, "uniequip_table", source="gamedata", default={})

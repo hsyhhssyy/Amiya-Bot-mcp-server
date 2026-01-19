@@ -4,6 +4,7 @@ import logging
 import sys
 
 from src.app.bootstrap_disk import build_context_from_disk
+from src.app.config import load_from_disk
 
 from src.adapters.cmd.app import CommandLineInterface
 
@@ -13,7 +14,8 @@ async def cmd_main():
     """主函数：初始化上下文并启动CLI"""
     try:
         logger.info("正在初始化应用上下文...")
-        ctx = await build_context_from_disk()
+        cfg = load_from_disk()
+        ctx = await build_context_from_disk(cfg)
         logger.info("✅ 上下文初始化完成")
         
         # 启动命令行界面
