@@ -16,11 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN python -m pip install playwright==1.57.0
 
-RUN playwright install chromium
-
-RUN python -m pip show playwright
-RUN python -c "import sys; print('\n'.join(sys.path))"
-
-RUN python -m playwright install --with-deps
+RUN python -m playwright install --with-deps chromium
 
 CMD ["python", "main.py"]

@@ -16,6 +16,8 @@ from src.app.renderers.jinja_json_renderer import JinjaJsonRenderer
 from src.app.renderers.jinja_template_loader import JinjaTemplateLoader
 from src.app.renderers.jinja_text_renderer import JinjaTextRenderer
 from src.app.renderers.types import Renderer
+from src.app.transformers.types import Transformer
+from src.app.transformers.html_to_png_transformer import HTMLToPNGTransformer
 from src.domain.types import QueryResult
 
 logger = logging.getLogger(__name__)
@@ -39,25 +41,43 @@ class CardArtifact:
         return self.path.read_text(encoding=encoding)
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    """
+    深合并配置：用于 viewport 等嵌套 dict 的覆写。
+    override 优先。
+    """
+    out = dict(base)
+    for k, v in (override or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
 class CardService:
     """
-    需求对齐版：
+    需求对齐版（使用 HTMLToPNGTransformer）：
 
     1) PNG 必须由 HTML 渲染而来；缺 html 模板 => png 必须报错。
     2) 产物统一落盘：png/html/txt/json 都是磁盘缓存产物。
+       - 请求 png 时，会同时确保 html artifact 生成并落盘（复用缓存，避免重复渲染）。
     3) 模板不一定同时具备所有格式：
        - 只有当用户请求某个格式时，才要求对应模板存在；
        - 未请求的格式，即使模板缺失，也绝不报错、绝不尝试加载。
+       - 例外：请求 png 等价于“也请求 html”，因为 png 依赖 html。
     4) 未知 format 直接报错。
     """
 
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, *, html_to_png: Transformer | None = None):
         templates_root = cfg.ProjectRoot / "data" / "templates"
         loader = JinjaTemplateLoader(str(templates_root))
 
         self.text_renderer: Renderer = JinjaTextRenderer(loader)
         self.json_renderer: Renderer = JinjaJsonRenderer(loader)
         self.html_renderer: Renderer = JinjaHtmlRenderer(loader)
+
+        self.html_to_png: Transformer = html_to_png or HTMLToPNGTransformer()
 
         self.cache_root: Path = cfg.ResourcePath / "cache" / "cards"
         self.cache_root.mkdir(parents=True, exist_ok=True)
@@ -74,75 +94,37 @@ class CardService:
         params: dict | None = None,
         format: str = "png",
     ) -> CardArtifact:
-        """
-        返回指定 format 的单个产物（如果磁盘已有则直接返回，否则渲染并落盘）。
-        """
         fmt = format.lower().strip().lstrip(".")
         allowed = ("png", "html", "txt", "json")
         if fmt not in allowed:
-            raise ValueError(f"Unsupported format: {format}._toggle must be one of {allowed}")
+            raise ValueError(f"Unsupported format: {format}. Must be one of {allowed}")
 
         params = params or {}
+        qr = self._ensure_query_result(payload)
 
-        out_dir = self.cache_root / template / payload_key
-        out_path = out_dir / f"artifact.{fmt}"
+        # png：先确保 html 落盘并复用
+        if fmt == "png":
+            html_artifact = await self.get(
+                template=template,
+                payload_key=payload_key,
+                payload=qr,
+                params=params,
+                format="html",
+            )
+            return await self._get_png_from_html(
+                template=template,
+                payload_key=payload_key,
+                html_artifact=html_artifact,
+                qr=qr,
+                params=params,
+            )
 
-        # 快速命中
-        if out_path.exists():
-            try:
-                if out_path.stat().st_size > 0:
-                    return CardArtifact(template, payload_key, fmt, out_path)
-            except FileNotFoundError:
-                pass
-
-        # 同 key 并发只做一次
-        lock_key = f"{template}:{payload_key}:{fmt}"
-        lock = await self._get_lock(lock_key)
-
-        async with lock:
-            # double-check
-            if out_path.exists():
-                try:
-                    if out_path.stat().st_size > 0:
-                        return CardArtifact(template, payload_key, fmt, out_path)
-                except FileNotFoundError:
-                    pass
-
-            out_dir.mkdir(parents=True, exist_ok=True)
-            qr = self._ensure_query_result(payload)
-
-            if fmt == "html":
-                ro = self.html_renderer.render(template, qr)  # 缺模板 => TemplateNotFound（请求才要求存在）
-                await self._atomic_write_text(out_path, ro.payload, encoding="utf-8")
-                return CardArtifact(template, payload_key, fmt, out_path, mime=ro.mime)
-
-            elif fmt == "txt":
-                ro = self.text_renderer.render(template, qr)  # 缺模板 => TemplateNotFound
-                await self._atomic_write_text(out_path, ro.payload, encoding="utf-8")
-                return CardArtifact(template, payload_key, fmt, out_path, mime=ro.mime)
-
-            elif fmt == "json":
-                ro = self.json_renderer.render(template, qr)  # 缺模板 => TemplateNotFound
-                await self._atomic_write_text(out_path, ro.payload, encoding="utf-8")
-                return CardArtifact(template, payload_key, fmt, out_path, mime=ro.mime)
-
-            elif fmt == "png":
-                # 只在请求 png 时才加载 html / json(可选配置)
-                html_ro = self.html_renderer.render(template, qr)  # 缺 html 模板 => 必须报错（需求 1）
-                render_cfg = self._load_png_render_cfg_optional(template, qr)  # 缺 json 模板 => 静默 {}
-
-                merged_cfg = dict(render_cfg)
-                merged_cfg.update(params)
-
-                await self._render_html_to_png(
-                    html=html_ro.payload,
-                    out_path=out_path,
-                    cfg=merged_cfg,
-                )
-                return CardArtifact(template, payload_key, fmt, out_path, mime="image/png")
-
-            # 理论上走不到，因为上面已经校验过 allowed
-            raise ValueError(f"Unsupported format: {format}")
+        return await self._get_single_non_png(
+            template=template,
+            payload_key=payload_key,
+            qr=qr,
+            format=fmt,
+        )
 
     async def get_many(
         self,
@@ -153,12 +135,6 @@ class CardService:
         params: dict | None = None,
         formats: list[str] | None = None,
     ) -> dict[str, CardArtifact]:
-        """
-        一次请求多个格式，逐个生成并落盘。
-        - 请求到的格式缺模板会报错（符合“请求才要求存在”）
-        - png 仍然强依赖 html
-        - 未知格式会直接报错
-        """
         formats = formats or ["png", "html"]
         out: dict[str, CardArtifact] = {}
         for f in formats:
@@ -170,6 +146,109 @@ class CardService:
                 format=f,
             )
         return out
+
+    # ----------------- core implementations -----------------
+
+    async def _get_single_non_png(
+        self,
+        *,
+        template: str,
+        payload_key: str,
+        qr: QueryResult,
+        format: str,  # "html" | "txt" | "json"
+    ) -> CardArtifact:
+        out_dir = self.cache_root / template / payload_key
+        out_path = out_dir / f"artifact.{format}"
+
+        # 快速命中
+        if out_path.exists():
+            try:
+                if out_path.stat().st_size > 0:
+                    return CardArtifact(template, payload_key, format, out_path)
+            except FileNotFoundError:
+                pass
+
+        lock_key = f"{template}:{payload_key}:{format}"
+        lock = await self._get_lock(lock_key)
+
+        async with lock:
+            # double-check
+            if out_path.exists():
+                try:
+                    if out_path.stat().st_size > 0:
+                        return CardArtifact(template, payload_key, format, out_path)
+                except FileNotFoundError:
+                    pass
+
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            if format == "html":
+                ro = self.html_renderer.render(template, qr)  # 缺模板 => TemplateNotFound（请求才要求存在）
+                await self._atomic_write_text(out_path, ro.payload, encoding="utf-8")
+                return CardArtifact(template, payload_key, format, out_path, mime=ro.mime)
+
+            if format == "txt":
+                ro = self.text_renderer.render(template, qr)
+                await self._atomic_write_text(out_path, ro.payload, encoding="utf-8")
+                return CardArtifact(template, payload_key, format, out_path, mime=ro.mime)
+
+            if format == "json":
+                ro = self.json_renderer.render(template, qr)
+                # 注意：你的 JinjaJsonRenderer 返回 payload 为 dict/list（不是字符串）
+                json_text = json.dumps(ro.payload, ensure_ascii=False, indent=2)
+                await self._atomic_write_text(out_path, json_text, encoding="utf-8")
+                return CardArtifact(template, payload_key, format, out_path, mime=ro.mime)
+
+            raise ValueError(f"Unsupported non-png format: {format}")
+
+    async def _get_png_from_html(
+        self,
+        *,
+        template: str,
+        payload_key: str,
+        html_artifact: CardArtifact,
+        qr: QueryResult,
+        params: dict,
+    ) -> CardArtifact:
+        out_dir = self.cache_root / template / payload_key
+        out_path = out_dir / "artifact.png"
+
+        # 快速命中
+        if out_path.exists():
+            try:
+                if out_path.stat().st_size > 0:
+                    return CardArtifact(template, payload_key, "png", out_path, mime="image/png")
+            except FileNotFoundError:
+                pass
+
+        lock_key = f"{template}:{payload_key}:png"
+        lock = await self._get_lock(lock_key)
+
+        async with lock:
+            # double-check
+            if out_path.exists():
+                try:
+                    if out_path.stat().st_size > 0:
+                        return CardArtifact(template, payload_key, "png", out_path, mime="image/png")
+                except FileNotFoundError:
+                    pass
+
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            # png 配置：json 模板可选，缺失静默
+            render_cfg = self._load_png_render_cfg_optional(template, qr)
+            merged_cfg = _deep_merge(render_cfg, params or {})
+
+            html = html_artifact.read_text(encoding="utf-8")
+
+            png_bytes = await self.html_to_png.transform(input=html, cfg=merged_cfg)
+            if not isinstance(png_bytes, (bytes, bytearray)):
+                raise TypeError(
+                    f"HTMLToPNGTransformer must return bytes, got {type(png_bytes)}"
+                )
+
+            await self._atomic_write_bytes(out_path, bytes(png_bytes))
+            return CardArtifact(template, payload_key, "png", out_path, mime="image/png")
 
     # ----------------- internals -----------------
 
@@ -185,31 +264,25 @@ class CardService:
         if isinstance(payload, QueryResult):
             return payload
         if isinstance(payload, dict):
-            return QueryResult(data=payload)
-        return QueryResult(data={"payload": payload})
+            return QueryResult(type="", key="", title="", data=payload)
+        return QueryResult(type="", key="", title="", data={"payload": payload})
 
     def _load_png_render_cfg_optional(self, template: str, qr: QueryResult) -> dict[str, Any]:
         """
         png 渲染配置来源：尝试用 json 模板渲染出配置 dict。
         - json 模板缺失：静默返回 {}
         - json 不是 dict 或解析失败：静默返回 {}
-        只有在请求 png 时才会调用（满足需求 3）。
+        只有在请求 png 时才会调用（满足“未请求不报错”）。
         """
         try:
             ro = self.json_renderer.render(template, qr)
         except TemplateNotFound:
             return {}
 
-        text = (ro.payload or "").strip()
-        if not text:
+        payload = ro.payload
+        if payload is None:
             return {}
-
-        try:
-            cfg = json.loads(text)
-            return cfg if isinstance(cfg, dict) else {}
-        except Exception as e:
-            logger.debug("png render cfg parse failed: template=%s err=%s", template, e)
-            return {}
+        return payload if isinstance(payload, dict) else {}
 
     async def _atomic_write_text(self, path: Path, content: str, *, encoding: str = "utf-8") -> None:
         tmp = path.with_suffix(path.suffix + ".tmp")
@@ -220,45 +293,3 @@ class CardService:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_bytes(content)
         os.replace(tmp, path)
-
-    async def _render_html_to_png(self, *, html: str, out_path: Path, cfg: dict[str, Any]) -> None:
-        """
-        Playwright 渲染 HTML 为 PNG
-
-        cfg 常用字段（都可选）：
-        - viewport: {"width": 900, "height": 520, "deviceScaleFactor": 2}
-        - full_page: true/false
-        - wait_until: "load" | "domcontentloaded" | "networkidle"
-        - extra_wait_ms: 0..n
-        - transparent: true/false
-        """
-        viewport = cfg.get("viewport") or {"width": 900, "height": 520}
-        full_page = bool(cfg.get("full_page", False))
-        wait_until = cfg.get("wait_until", "networkidle")
-        extra_wait_ms = int(cfg.get("extra_wait_ms", 0))
-        transparent = bool(cfg.get("transparent", False))
-
-        try:
-            from playwright.async_api import async_playwright
-        except Exception as e:
-            raise RuntimeError(
-                "Playwright 不可用，无法渲染 png。请安装 playwright 并执行 playwright install。"
-            ) from e
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch()
-            try:
-                page = await browser.new_page(viewport=viewport)
-                await page.set_content(html, wait_until=wait_until)
-
-                if extra_wait_ms > 0:
-                    await page.wait_for_timeout(extra_wait_ms)
-
-                png_bytes = await page.screenshot(
-                    full_page=full_page,
-                    type="png",
-                    omit_background=transparent,
-                )
-                await self._atomic_write_bytes(out_path, png_bytes)
-            finally:
-                await browser.close()
