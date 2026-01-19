@@ -8,7 +8,6 @@ from src.domain.models.operator import Operator
 from src.domain.services.operator import search_operator_by_name
 from src.helpers.card_urls import build_card_url
 from src.helpers.gamedata.search import build_sources, search_source_spec
-from src.helpers.renderer import render_with_best_renderer
 from src.app.context import AppContext
 from src.domain.services.operator_basic import get_operator_basic_core, OperatorNotFoundError
 from src.app.renderers.types import Renderer
@@ -107,7 +106,10 @@ def register_operator_basic_tool(mcp, app):
             format="png",
         )
 
-        return json.dumps({
+        result = json.dumps({
             "data": text_artifact.read_text(),
             "image_url": image_url,
-        })
+        }, ensure_ascii=False)
+
+        logger.info(f"查询干员基础信息成功：{result}")
+        return result

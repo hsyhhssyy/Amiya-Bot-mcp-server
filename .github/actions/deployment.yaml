@@ -26,7 +26,7 @@ spec:
         - name: docker.hsyhhssyy.net
       containers:
         - name: server
-          image: docker.hsyhhssyy.net/amiyabot/amiyabot-mcp-server:test-local
+          image: docker.hsyhhssyy.net/amiyabot/amiyabot-mcp-server:0.1.6
           imagePullPolicy: Always
           env:
             - name: PORT
