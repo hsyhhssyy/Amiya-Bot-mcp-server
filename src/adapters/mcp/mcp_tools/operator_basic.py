@@ -15,13 +15,14 @@ from src.app.renderers.types import Renderer
 logger = logging.getLogger(__name__)
 
 def register_operator_basic_tool(mcp, app):
-    @mcp.tool(description="获取干员的基础信息和属性")
+    @mcp.tool(description="获取干员的基础信息和属性，如果可以，请使用中文名称进行查询。")
     async def get_operator_basic(
         operator_name: Annotated[str, Field(description='干员名')],
         operator_name_prefix: Annotated[str, Field(description='干员名的前缀，没有则为空')] = '',
     ) -> dict:
         """
         获取干员的基础信息和属性。同时还附加一张包含干员信息和立绘的图片。
+        如果可以，请使用中文名称进行查询。
 
         Args:
             operator_name (str): 干员名
@@ -75,56 +76,53 @@ def register_operator_basic_tool(mcp, app):
                         "message": "找到多个匹配的干员名称，需要用户做出选择",
                         "candidates": matched_names
                     }
-        except OperatorNotFoundError as e:
-            return {
-                "message": str(e)
+
+            # 优先json_renderer,然后text_renderer,然后直接json format
+            op: Operator = name_matches[0].value
+
+            # TODO 领域查询，需要进行替换，目前该函数的目的是为了配合旧版模板
+            result = search_operator_by_name(context, op.name)
+
+            # 生成 payload_key：要求包含 version
+            bundle = context.data_repository.get_bundle()
+            bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
+
+            payload_key = f"operator:{op.name}:{bundle_version}"
+
+            # ✅ 交给 CardService：如果磁盘已有 png，就直接命中返回；否则现场渲染
+            text_artifact = await context.card_service.get(
+                template="operator_info",
+                payload_key=payload_key,
+                payload=result,
+                format="txt",
+                params=None,
+            )
+
+            img_artifact = await context.card_service.get(
+                template="operator_info",
+                payload_key=payload_key,
+                payload=result,
+                format="png",
+                params=None,
+            )
+
+            image_url = build_card_url(
+                cfg=context.cfg,
+                template="operator_info",
+                payload_key=payload_key,
+                format="png",
+            )
+
+            result = {
+                "data": text_artifact.read_text(),
+                "image_url": image_url,
             }
         except Exception:
             logger.exception("查询失败")
             return {
-                "message": "查询干员信息时发生错误"
+                "message": "查询干员信息时发生错误."
             }
 
-        # 优先json_renderer,然后text_renderer,然后直接json format
-        op: Operator = name_matches[0].value
-
-        # TODO 领域查询，需要进行替换，目前该函数的目的是为了配合旧版模板
-        result = search_operator_by_name(context, op.name)
-
-        # 生成 payload_key：要求包含 version
-        bundle = context.data_repository.get_bundle()
-        bundle_version = getattr(bundle, "version", None) or getattr(bundle, "hash", None) or "v0"
-
-        payload_key = f"operator:{op.name}:{bundle_version}"
-
-        # ✅ 交给 CardService：如果磁盘已有 png，就直接命中返回；否则现场渲染
-        text_artifact = await context.card_service.get(
-            template="operator_info",
-            payload_key=payload_key,
-            payload=result,
-            format="txt",
-            params=None,
-        )
-
-        img_artifact = await context.card_service.get(
-            template="operator_info",
-            payload_key=payload_key,
-            payload=result,
-            format="png",
-            params=None,
-        )
-
-        image_url = build_card_url(
-            cfg=context.cfg,
-            template="operator_info",
-            payload_key=payload_key,
-            format="png",
-        )
-
-        result = {
-            "data": text_artifact.read_text(),
-            "image_url": image_url,
-        }
 
         logger.info(f"查询干员基础信息成功：{json.dumps(result, ensure_ascii=False)}")
         return result

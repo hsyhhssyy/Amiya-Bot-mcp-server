@@ -233,9 +233,11 @@
             <div class="skill-item" style="display:flex">
               <div style="width: 120px;text-align: center">
                 <div>
+                  {% if skill_icon_url is defined %}
                   <img style="width: 80px"
-                       src="{{ skill_icon_url(sk.icon) }}"
-                       alt="skill">
+                      src="{{ skill_icon_url(sk.icon) }}"
+                      alt="skill">
+                  {% endif %}
                 </div>
                 <div>{{ sk.name or "" }}</div>
               </div>

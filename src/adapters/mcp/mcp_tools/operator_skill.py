@@ -124,11 +124,14 @@ def register_operator_skill_tool(mcp, app):
                 "data": text_artifact.read_text(),
             }
 
-            logger.info(f"查询干员技能信息成功：{json.dumps(result, ensure_ascii=False)}")
-            return result
-
         except Exception:
             logger.exception("查询技能失败")
-            return "查询干员技能信息时发生错误"
+            return {
+                "message": "查询干员技能信息时发生错误."
+            }
+
+        logger.info(f"查询干员技能信息成功：{json.dumps(result, ensure_ascii=False)}")
+        return result
+
 
 
