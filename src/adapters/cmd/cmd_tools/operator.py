@@ -25,25 +25,44 @@ async def cmd_operator(ctx: AppContext, args: str) -> str:
 
     parts = args.split(maxsplit=1)
     operator_name = parts[0]
+    operator_name_prefix = parts[1] if len(parts) > 1 else ""
 
     try:
         logger.info(f"查询干员: {operator_name}")
 
-        operator_query = operator_name
+        operator_combine = operator_name_prefix + operator_name
 
         search_sources = build_sources(ctx.data_repository.get_bundle(), source_key=["name"])
-        search_results = search_source_spec(operator_query, sources=search_sources)
+        search_results = search_source_spec([operator_combine,operator_name], sources=search_sources)
 
         # 注意：你原本的判断是 len(search_results.matches) > 1
         # 更稳：只看 name key 的命中
         if not search_results:
-            raise OperatorNotFoundError(f"未找到干员: {operator_query}")
+            raise OperatorNotFoundError(f"未找到干员: {operator_name_prefix} {operator_name}")
+
+        if not search_results:
+                return f"❌ 未找到干员: {operator_name_prefix} {operator_name}"
 
         name_matches = search_results.by_key("name")
         if len(name_matches) != 1:
-            matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
-            return f"❌ 找到多个匹配的干员名称: {', '.join(matched_names)}，请提供更精确的名称。"
 
+            # matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
+            # return {
+            #     "message": f"找到多个匹配的干员名称，需要用户做出选择",
+            #     "candidates": matched_names
+            # }
+
+            # 改为先判断两个exact match是否存在，优先operator_combine，如果存在，则直接用它
+            exact_matches = [m for m in name_matches if m.matched_text == operator_combine]
+            if not exact_matches:
+                exact_matches = [m for m in name_matches if m.matched_text == operator_name]
+            if len(exact_matches) == 1:
+                name_matches = exact_matches
+            else:
+                matched_names = [m.matched_text for m in name_matches]
+                matched_names = list(dict.fromkeys(matched_names))
+                return f"❌ 找到多个匹配的干员名称: {', '.join(matched_names)}，请提供更精确的名称。"
+        
         op: Operator = name_matches[0].value
 
         # 领域查询（保留）

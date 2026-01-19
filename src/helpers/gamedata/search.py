@@ -2,13 +2,14 @@
 from typing import Any, Literal
 from dataclasses import dataclass
 from difflib import SequenceMatcher
-from typing import Callable, List, Optional, Sequence
+from typing import Callable, List, Optional, Sequence, Union
 
 from src.domain.models.operator import Operator
 from src.data.models.bundle import DataBundle
 from src.app.context import AppContext
 
 MatchKind = Literal["exact", "contains", "similar"]
+QueryInput = Union[str, Sequence[str]] 
 
 @dataclass(frozen=True)
 class MatchResult:
@@ -18,6 +19,7 @@ class MatchResult:
     kind: MatchKind       # "exact" | "contains" | "similar"
     score: float          # 可选：相似度得分（如果你的 find_most_similar 能返回）
     source_order: int     # SourceSpec 的顺序，用来稳定排序
+    query_order: int      # query 在传入数组中的顺序，用来稳定同级排序
 
 @dataclass
 class SearchResults:
@@ -49,8 +51,128 @@ def _sim(a: str, b: str) -> float:
     # 0~1
     return SequenceMatcher(None, a, b).ratio()
 
-def search_source_spec(
+def _normalize_queries(query: QueryInput) -> List[str]:
+    """
+    把 query 统一成 list[str]：
+    - 支持 str / Sequence[str]
+    - strip
+    - 去空
+    - 去重但保留顺序
+    """
+    if isinstance(query, str):
+        items = [query]
+    else:
+        items = list(query)
+
+    seen = set()
+    out: List[str] = []
+    for q in items:
+        if not isinstance(q, str):
+            continue
+        q = q.strip()
+        if not q:
+            continue
+        if q in seen:
+            continue
+        seen.add(q)
+        out.append(q)
+    return out
+
+def _search_one_query(
     query: str,
+    *,
+    query_order: int,            # ✅ 新增
+    sources: List[SourceSpec],
+    exact_only: bool,
+    min_sim: float,
+) -> List[MatchResult]:
+    """
+    对单个 query 执行搜索。
+    逻辑完全等同于你原来的 search_source_spec 内部实现。
+    """
+    all_results: List[MatchResult] = []
+
+    for si, spec in enumerate(sources):
+        cand = list(spec.candidates())
+        if not cand:
+            continue
+
+        # 1) exact
+        exact_hits = [c for c in cand if c == query]
+        has_exact = len(exact_hits) > 0
+
+        # exact 全部加入（通常只有一个，但不强假设）
+        for c in exact_hits:
+            all_results.append(MatchResult(
+                key=spec.key,
+                matched_text=c,
+                value=spec.resolve(c),
+                kind="exact",
+                score=1.0,
+                source_order=si,
+                query_order=query_order,   # ✅
+            ))
+
+        # 如果全局禁止模糊，直接跳过后续
+        if exact_only:
+            continue
+
+        # 如果这个 source 不允许 fuzzy，也跳过
+        if not spec.allow_fuzzy:
+            continue
+
+        # 如果命中 exact 且不允许继续 fuzzy，则结束这个 spec
+        if has_exact and not spec.continue_after_exact:
+            continue
+
+        # 2) contains（候选包含 query）
+        contains_hits = [c for c in cand if query in c and c != query]
+        if contains_hits:
+            # 更短/更接近的排前一点，但是更看重长度差
+            # score 作为辅助：query 越长越好、candidate 越短越好
+            def contains_score(c: str) -> float:
+                pos = c.find(query)
+                return 1.0 / (1 + pos) + 1.0 / (1 + abs(len(c) - len(query)))
+
+            contains_hits_sorted = sorted(contains_hits, key=contains_score, reverse=True)
+            for c in contains_hits_sorted:
+                all_results.append(MatchResult(
+                    key=spec.key,
+                    matched_text=c,
+                    value=spec.resolve(c),
+                    kind="contains",
+                    score=contains_score(c),
+                    source_order=si,
+                    query_order=query_order,  # ✅
+                ))
+            # 规则：如果有 contains，就不做逐字相似度
+            continue
+
+        # 3) similar（没有 contains 时）
+        scored = []
+        for c in cand:
+            if c == query:
+                continue
+            s = _sim(query, c)
+            if s >= min_sim:
+                scored.append((s, c))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        for s, c in scored:
+            all_results.append(MatchResult(
+                key=spec.key,
+                matched_text=c,
+                value=spec.resolve(c),
+                kind="similar",
+                score=s,
+                source_order=si,
+                query_order=query_order,  # ✅
+            ))
+
+    return all_results
+
+def search_source_spec(
+    query: QueryInput,    # ✅ 支持字符串或字符串数组
     *,
     sources: List[SourceSpec],
     n: int = 10,
@@ -164,103 +286,41 @@ def search_source_spec(
         show_candidates(results.matches)
     """
         
-    query = query.strip()
-    if not query or n <= 0:
+    queries = _normalize_queries(query)
+    if not queries or n <= 0:
         return SearchResults(matches=[])
 
     all_results: List[MatchResult] = []
 
-    for si, spec in enumerate(sources):
-        cand = list(spec.candidates())
-        if not cand:
-            continue
-
-        # 1) exact
-        exact_hits = [c for c in cand if c == query]
-        has_exact = len(exact_hits) > 0
-
-        # exact 全部加入（通常只有一个，但不强假设）
-        for c in exact_hits:
-            all_results.append(MatchResult(
-                key=spec.key,
-                matched_text=c,
-                value=spec.resolve(c),
-                kind="exact",
-                score=1.0,
-                source_order=si
-            ))
-
-        # 如果全局禁止模糊，直接跳过后续
-        if exact_only:
-            continue
-
-        # 如果这个 source 不允许 fuzzy，也跳过
-        if not spec.allow_fuzzy:
-            continue
-
-        # 如果命中 exact 且不允许继续 fuzzy，则结束这个 spec
-        if has_exact and not spec.continue_after_exact:
-            continue
-
-        # 2) contains（候选包含 query）
-        contains_hits = [c for c in cand if query in c and c != query]
-        if contains_hits:
-            # 更短/更接近的排前一点，但是更看重长度差
-            # score 作为辅助：query 越长越好、candidate 越短越好
-            def contains_score(c: str) -> float:
-                pos = c.find(query)
-                return 1.0 / (1 + pos) + 1.0 / (1 + abs(len(c) - len(query)))
-
-            contains_hits_sorted = sorted(contains_hits, key=contains_score, reverse=True)
-            for c in contains_hits_sorted:
-                all_results.append(MatchResult(
-                    key=spec.key,
-                    matched_text=c,
-                    value=spec.resolve(c),
-                    kind="contains",
-                    score=contains_score(c),
-                    source_order=si
-                ))
-            # 规则：如果有 contains，就不做逐字相似度（你说“如果没有逐字匹配的，才做相似度”）
-            continue
-
-        # 3) similar（没有 contains 时）
-        scored = []
-        for c in cand:
-            if c == query:
-                continue
-            s = _sim(query, c)
-            if s >= min_sim:
-                scored.append((s, c))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        for s, c in scored:
-            all_results.append(MatchResult(
-                key=spec.key,
-                matched_text=c,
-                value=spec.resolve(c),
-                kind="similar",
-                score=s,
-                source_order=si
-            ))
+    # 对每个 query 分别搜索
+    for qi, q in enumerate(queries):
+        all_results.extend(_search_one_query(
+            q,
+            query_order=qi,   # ✅
+            sources=sources,
+            exact_only=exact_only,
+            min_sim=min_sim,
+        ))
 
     # ---- 全局合并排序：exact 最前，然后 contains，然后 similar
     kind_rank = {"exact": 0, "contains": 1, "similar": 2}
 
-    # 你说：“所有 SourceSpec 中精确匹配的那一个总体排在最前面”
-    # -> 这里实现为：kind 优先，其次 source_order（保持你 sources 的顺序），
-    # 再其次 score（contains/similar 内部按分数），再其次 matched_text 稳定
+    # 同一匹配类型内：
+    #   1) 按 query_order（传入 query 的顺序）
+    #   2) 按 SourceSpec 顺序
+    #   3) 按 score
+    #   4) 再按 matched_text 稳定
     all_results.sort(
         key=lambda r: (
             kind_rank.get(r.kind, 99),
+            r.query_order,      # ✅ 核心：保证同级别按 query 顺序
             r.source_order,
             -r.score,
             r.matched_text
         )
     )
 
-    # 去重策略（可选）：
-    # 你没明确说要不要去重。我给一个“同 key 同 matched_text 去重”的温和版本，避免重复刷屏。
+    # 去重策略（同 key + matched_text）
     seen = set()
     deduped: List[MatchResult] = []
     for r in all_results:

@@ -18,24 +18,24 @@ def register_operator_skill_tool(mcp, app):
         operator_name_prefix: Annotated[str, Field(description="干员名的前缀，没有则为空")] = "",
         index: Annotated[int, Field(description="技能序号，从1开始")] = 1,
         level: Annotated[int, Field(description="技能等级 1~10（8~10为专精一/二/三）")] = 10,
-    ) -> str:
+    ) -> dict:
         if not getattr(app.state, "ctx", None):
-            return json.dumps({
+            return {
                 "message": "未初始化数据上下文"
-            })
+            }
 
         context: AppContext = app.state.ctx
         operator_query = (operator_name_prefix or "") + (operator_name or "")
 
         # 参数校验
         if index < 1:
-            return json.dumps({
+            return {
                 "message": f"技能序号 index 必须 >= 1（当前：{index}）"
-            })
+            }
         if level < 1 or level > 10:
-            return json.dumps({
+            return {
                 "message": f"技能等级 level 必须在 1~10 之间（当前：{level}）"
-            })
+            }
 
         try:
             # 1) 搜索唯一命中
@@ -44,9 +44,9 @@ def register_operator_skill_tool(mcp, app):
             search_results = search_source_spec(operator_query, sources=search_sources)
 
             if not search_results:
-                return json.dumps({
+                return {
                     "message": f"未找到干员: {operator_query}"
-                })
+                }
 
             SPType = get_table(bundle.tables,"sp_type",source = "local", default={})
             SkillType = get_table(bundle.tables,"skill_type",source = "local", default={})
@@ -56,30 +56,30 @@ def register_operator_skill_tool(mcp, app):
             if len(name_matches) != 1:
                 matched_names = [m.matched_text for m in search_results.matches if m.key == "name"]
                 matched_names = list(dict.fromkeys(matched_names))
-                return json.dumps({
+                return {
                     "message": "找到多个匹配的干员名称，需要用户做出选择",
                     "candidates": matched_names
-                }, ensure_ascii=False)
+                }
 
             op: Operator = name_matches[0].value
 
             # 2) 用领域模型取技能
             if not op.skills or len(op.skills) < index:
-                return json.dumps({
+                return {
                     "message": f"干员{op.name}没有第{index}个技能"
-                }, ensure_ascii=False)
+                }
 
             sk = op.skills[index - 1]
             if not sk.levels:
-                return json.dumps({
+                return {
                     "message": f"干员{op.name}的技能“{sk.name}”没有等级数据"
-                }, ensure_ascii=False)
+                }
             # 3) 匹配等级
             chosen = next((x for x in sk.levels if int(x.level) == int(level)), None)
             if not chosen:
-                return json.dumps({
+                return {
                     "message": f"干员{op.name}的技能“{sk.name}”无法升级到等级{level}"
-                }, ensure_ascii=False)
+                }
             # 4) 文本映射与兜底
             sp_data = getattr(chosen, "sp", None)
             sp_type_raw = getattr(sp_data, "sp_type", "") if sp_data else ""
@@ -120,11 +120,11 @@ def register_operator_skill_tool(mcp, app):
                 format="txt",
             )
 
-            result = json.dumps({
+            result = {
                 "data": text_artifact.read_text(),
-            }, ensure_ascii=False)
+            }
 
-            logger.info(f"查询干员技能信息成功：{result}")
+            logger.info(f"查询干员技能信息成功：{json.dumps(result, ensure_ascii=False)}")
             return result
 
         except Exception:
