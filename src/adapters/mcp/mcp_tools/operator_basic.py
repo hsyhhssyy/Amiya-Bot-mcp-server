@@ -14,26 +14,25 @@ from src.app.renderers.types import Renderer
 
 logger = logging.getLogger(__name__)
 
+tool_description = """获取干员的基础信息和属性。同时还附加一张包含干员信息和立绘的图片。
+如果可以，请使用中文名称进行查询。
+
+Args:
+    operator_name (str): 干员名
+    operator_name_prefix (str): 干员名的前缀，没有则为空，如干员假日威龙陈的前缀为“假日威龙”
+
+Returns:
+    str: 一个Json对象，文本可读的干员信息包含在data字段中，图片的URL包含在image_url字段中。
+"""
+
+
 def register_operator_basic_tool(mcp, app):
-    @mcp.tool(description="获取干员的基础信息和属性，如果可以，请使用中文名称进行查询。")
+    @mcp.tool(description=tool_description)
     async def get_operator_basic(
         operator_name: Annotated[str, Field(description='干员名')],
         operator_name_prefix: Annotated[str, Field(description='干员名的前缀，没有则为空')] = '',
     ) -> dict:
-        """
-        获取干员的基础信息和属性。同时还附加一张包含干员信息和立绘的图片。
-        如果可以，请使用中文名称进行查询。
-
-        Args:
-            operator_name (str): 干员名
-            operator_name_prefix (str): 干员名的前缀，没有则为空，如干员假日威龙陈的前缀为“假日威龙”
-
-        Returns:
-            str: 一个Json对象，文本可读的干员信息包含在data字段中，图片的URL包含在image_url字段中。
-
-        Raises:
-            OperatorNotFoundError: 指定名称的干员未找到
-        """
+        
         logger.info(f"查询干员基础信息：{operator_name_prefix}{operator_name}")
 
         if not getattr(app.state, "ctx", None):

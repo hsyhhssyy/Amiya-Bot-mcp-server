@@ -12,7 +12,7 @@ RUN apt-get install -y --no-install-recommends \
 
 RUN python -m pip install playwright==1.57.0
 
-RUN python -m playwright install --with-deps chromium
+RUN python -m playwright install --with-deps
 
 COPY . /app
 
