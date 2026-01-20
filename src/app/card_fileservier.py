@@ -6,6 +6,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.app.card_service import CardService
 from src.app.config import Config
@@ -22,6 +23,17 @@ def register_cardserver_asgi(app: FastAPI, *, cfg: Config) -> None:
 
     cache_root: Path = cfg.ResourcePath / "cache" / "cards"
     cache_root.mkdir(parents=True, exist_ok=True)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,  # 用 "*" 时必须 False
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Content-Length", "Content-Type"],
+        max_age=86400,
+    )
+
 
     app.mount(
         mount_path,
